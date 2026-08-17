@@ -12,14 +12,14 @@ const renderMessageWithLinks = (text: string) => {
           href={part} 
           target="_blank" 
           rel="noopener noreferrer" 
-          className="text-blue-400 underline font-semibold hover:text-blue-300 transition-colors"
+          className="text-cyan-400 hover:text-cyan-300 underline font-semibold transition-colors break-all inline"
           onClick={(e) => e.stopPropagation()}
         >
           {part}
         </a>
       );
     }
-    return part;
+    return <span key={i} className="break-words">{part}</span>;
   });
 };
 
@@ -38,8 +38,8 @@ export function ChatMessageItem({
 
   if (isSystem) {
     return (
-      <div className="flex justify-center my-2">
-        <span className="text-xs text-zinc-500 bg-zinc-800/50 px-3 py-1 rounded-full">
+      <div className="flex justify-center my-1.5">
+        <span className="text-xs text-zinc-300 bg-black/80 backdrop-blur-md border border-zinc-700/50 px-3 py-1 rounded-full shadow-md">
           {message.message}
         </span>
       </div>
@@ -48,15 +48,15 @@ export function ChatMessageItem({
 
   if (isCTA) {
     return (
-      <div className="flex flex-col gap-1.5 my-3 bg-gradient-to-r from-indigo-500/10 to-purple-500/10 border-l-4 border-l-indigo-500 p-3 rounded-r-xl shadow-sm">
+      <div className="flex flex-col gap-1.5 my-2 bg-[#121124]/95 backdrop-blur-md border-l-4 border-l-indigo-500 border border-indigo-500/40 p-3 rounded-r-xl shadow-xl overflow-hidden">
         <div className="flex items-center gap-1.5">
-          <Rocket className="w-4 h-4 text-indigo-400" />
-          <span className="font-bold text-sm tracking-wide text-indigo-400">MOYA</span>
-          <span className="text-xs text-zinc-500 ml-auto">
+          <Rocket className="w-4 h-4 text-indigo-400 shrink-0" />
+          <span className="font-bold text-sm tracking-wide text-indigo-300">MOYA</span>
+          <span className="text-xs text-zinc-400 font-mono ml-auto shrink-0">
             {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed text-zinc-200 font-medium">
+        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100 font-medium">
           {renderMessageWithLinks(message.message)}
         </p>
       </div>
@@ -66,28 +66,28 @@ export function ChatMessageItem({
   if (isAI && isAdmin) {
     const showPrivateBadge = isAdmin && isPrivate;
     return (
-      <div className={`flex flex-col gap-1.5 my-2 p-3 rounded-xl border ${
+      <div className={`flex flex-col gap-1.5 my-2 p-3 rounded-xl border backdrop-blur-md shadow-xl overflow-hidden ${
         showPrivateBadge 
-          ? 'bg-purple-950/20 border-purple-500/30 text-purple-200 shadow-sm' 
-          : 'bg-blue-500/5 border-blue-500/20 text-zinc-200'
+          ? 'bg-[#1e102d]/95 border-purple-500/50 text-purple-100' 
+          : 'bg-[#0f172a]/95 border-blue-500/40 text-zinc-100'
       }`}>
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 font-bold">
-            <Bot className={`w-4 h-4 ${showPrivateBadge ? 'text-purple-400' : 'text-blue-400'}`} />
-            <span className={showPrivateBadge ? 'text-purple-400' : 'text-blue-400'}>
+        <div className="flex items-center justify-between text-xs gap-2">
+          <div className="flex items-center gap-1.5 font-bold min-w-0">
+            <Bot className={`w-4 h-4 shrink-0 ${showPrivateBadge ? 'text-purple-400' : 'text-blue-400'}`} />
+            <span className={`truncate ${showPrivateBadge ? 'text-purple-300' : 'text-blue-300'}`}>
               {message.sender_name || 'MOYA AI'}
             </span>
             {showPrivateBadge && (
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider bg-purple-500/20 text-purple-300 px-2 py-0.5 rounded-full font-semibold">
-                <Lock className="w-2.5 h-2.5" /> Private Reply
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider bg-purple-500/30 text-purple-200 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                <Lock className="w-2.5 h-2.5" /> Private
               </span>
             )}
           </div>
-          <span className="text-zinc-500 font-mono">
+          <span className="text-zinc-400 font-mono text-[11px] shrink-0">
             {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed text-zinc-200">
+        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100">
           {renderMessageWithLinks(message.message)}
         </p>
       </div>
@@ -98,44 +98,38 @@ export function ChatMessageItem({
     const showPrivateBadge = isAdmin && isPrivate;
     const displayName = isHost ? message.sender_name : 'Host';
     return (
-      <div className={`flex flex-col gap-1.5 my-2 p-3 rounded-xl border ${
-        showPrivateBadge 
-          ? 'bg-amber-950/20 border-amber-500/30' 
-          : 'bg-amber-500/5 border-amber-500/20'
-      }`}>
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center gap-1.5 font-semibold text-amber-400">
-            <Crown className="w-4 h-4 text-amber-400" />
-            <span>{displayName}</span>
+      <div className="flex flex-col gap-1.5 my-2 p-3 rounded-xl border bg-[#1a1408]/95 backdrop-blur-md border-amber-500/60 shadow-xl overflow-hidden">
+        <div className="flex items-center justify-between text-xs gap-2">
+          <div className="flex items-center gap-1.5 font-bold text-amber-400 min-w-0">
+            <Crown className="w-4 h-4 text-amber-400 shrink-0" />
+            <span className="truncate">{displayName}</span>
             {showPrivateBadge && (
-              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-semibold">
-                <Lock className="w-2.5 h-2.5" /> Private Whisper
+              <span className="flex items-center gap-1 text-[10px] uppercase tracking-wider bg-amber-500/30 text-amber-200 px-2 py-0.5 rounded-full font-semibold shrink-0">
+                <Lock className="w-2.5 h-2.5" /> Whisper
               </span>
             )}
           </div>
-          <span className="text-zinc-500 font-mono">
+          <span className="text-zinc-400 font-mono text-[11px] shrink-0">
             {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
           </span>
         </div>
-        <p className="text-sm whitespace-pre-wrap leading-relaxed text-zinc-200">
+        <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100 font-normal">
           {renderMessageWithLinks(message.message)}
         </p>
       </div>
     );
   }
 
-
-
   // ATTENDEE MESSAGE
   return (
-    <div className="flex flex-col gap-1 my-2 p-2 rounded-lg hover:bg-white/[0.02] transition-colors">
-      <div className="flex items-center justify-between text-xs">
-        <span className="font-semibold text-zinc-200">{message.sender_name}</span>
-        <span className="text-zinc-500 font-mono">
+    <div className="flex flex-col gap-1 my-1.5 p-2.5 rounded-xl bg-black/80 backdrop-blur-md border border-white/15 shadow-lg overflow-hidden">
+      <div className="flex items-center justify-between text-xs gap-2">
+        <span className="font-semibold text-zinc-100 truncate">{message.sender_name}</span>
+        <span className="text-zinc-400 font-mono text-[11px] shrink-0">
           {new Date(message.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>
-      <p className="text-sm whitespace-pre-wrap leading-relaxed text-zinc-300">
+      <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-200">
         {renderMessageWithLinks(message.message)}
       </p>
     </div>

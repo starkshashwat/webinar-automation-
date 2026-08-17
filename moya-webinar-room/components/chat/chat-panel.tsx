@@ -200,8 +200,8 @@ export function ChatPanel({
       <div 
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex-1 overflow-y-auto p-4 space-y-1.5 custom-scrollbar relative"
-        style={isOverlay ? { maskImage: 'linear-gradient(to bottom, transparent, black 15%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 15%)' } : {}}
+        className={`flex-1 overflow-y-auto overflow-x-hidden ${isOverlay ? 'p-2 space-y-1.5' : 'p-4 space-y-2'} custom-scrollbar relative`}
+        style={isOverlay ? { maskImage: 'linear-gradient(to bottom, transparent, black 10%)', WebkitMaskImage: 'linear-gradient(to bottom, transparent, black 10%)' } : {}}
       >
         {visibleMessages.length === 0 ? (
           <div className="text-sm text-zinc-500 text-center mt-8 h-full flex flex-col items-center justify-center p-4">
