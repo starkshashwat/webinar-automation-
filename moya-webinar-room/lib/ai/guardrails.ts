@@ -1,0 +1,103 @@
+import { type AIResource, type AIConfidence, type AIResponseMode } from '@/types/ai';
+
+export interface GuardrailValidationInput {
+  rawResponse: string | null;
+  confidence: AIConfidence;
+  responseMode: AIResponseMode;
+  matchedResourceId?: string | null;
+  activeResources: AIResource[];
+  isPrivateIntentDetected?: boolean;
+}
+
+export interface GuardrailValidationResult {
+  finalResponse: string | null;
+  finalResponseMode: AIResponseMode;
+  confidence: AIConfidence;
+  isValid: boolean;
+  sanitized: boolean;
+  reason?: string;
+}
+
+const URL_REGEX = /(https?:\/\/[^\s]+)/gi;
+
+export function applyGuardrails(input: GuardrailValidationInput): GuardrailValidationResult {
+  const {
+    rawResponse,
+    confidence,
+    responseMode,
+    matchedResourceId,
+    activeResources,
+    isPrivateIntentDetected
+  } = input;
+
+  if (!rawResponse || responseMode === 'no_response') {
+    return {
+      finalResponse: null,
+      finalResponseMode: 'no_response',
+      confidence,
+      isValid: true,
+      sanitized: false,
+    };
+  }
+
+  let sanitizedText = rawResponse.trim();
+  let finalMode = responseMode;
+
+  // Enforce private mode if private intent was flagged
+  if (isPrivateIntentDetected && finalMode !== 'private') {
+    finalMode = 'private';
+  }
+
+  // Handle LOW confidence: Never hallucinate facts or make promises
+  if (confidence === 'LOW') {
+    return {
+      finalResponse: "I don't have enough information on that right now. Please reach out to our team directly or ask the host during Q&A.",
+      finalResponseMode: finalMode,
+      confidence: 'LOW',
+      isValid: true,
+      sanitized: true,
+      reason: 'Low confidence fallback applied',
+    };
+  }
+
+  // Anti-URL Hallucination Check
+  // 1. If a resource was matched, find its approved URL
+  let matchedResourceUrl: string | null = null;
+  if (matchedResourceId) {
+    const matched = activeResources.find((r) => r.id === matchedResourceId || r.name.toLowerCase() === matchedResourceId.toLowerCase());
+    if (matched) {
+      matchedResourceUrl = matched.url;
+    }
+  }
+
+  // 2. Scan for any URLs in the text
+  const detectedUrls = sanitizedText.match(URL_REGEX) || [];
+  const approvedUrls = activeResources.map((r) => r.url.trim().toLowerCase());
+
+  for (const url of detectedUrls) {
+    const cleanUrl = url.replace(/[),.;]+$/, ''); // strip trailing punctuation
+    const isApproved = approvedUrls.some((appUrl) => cleanUrl.toLowerCase().includes(appUrl) || appUrl.includes(cleanUrl.toLowerCase()));
+
+    if (!isApproved) {
+      // Remove or replace the hallucinated URL
+      if (matchedResourceUrl) {
+        sanitizedText = sanitizedText.replace(url, matchedResourceUrl);
+      } else {
+        sanitizedText = sanitizedText.replace(url, '[link provided in webinar description]');
+      }
+    }
+  }
+
+  // 3. If matched resource URL is known and not yet present in text, append it cleanly
+  if (matchedResourceUrl && !sanitizedText.includes(matchedResourceUrl)) {
+    sanitizedText = `${sanitizedText}\n\nHere is the link: ${matchedResourceUrl}`;
+  }
+
+  return {
+    finalResponse: sanitizedText,
+    finalResponseMode: finalMode,
+    confidence,
+    isValid: true,
+    sanitized: true,
+  };
+}
