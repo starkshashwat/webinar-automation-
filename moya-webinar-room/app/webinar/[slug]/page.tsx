@@ -1,63 +1,89 @@
-export const runtime = 'edge';
-import { notFound } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
-import { WebinarRoom } from '@/components/webinar/webinar-room';
-import { type Webinar, type WebinarSession } from '@/types/webinar';
-import { JoinForm } from './join-form';
+'use client';
 
-export const dynamic = 'force-dynamic';
+import { useEffect, useState, use } from 'react';
+import { notFound } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
+import { JoinForm } from './join-form';
+import { type Webinar, type WebinarSession } from '@/types/webinar';
 
 interface PageProps {
   params: Promise<{ slug: string }>;
 }
 
-export default async function WebinarPage({ params }: PageProps) {
-  const { slug } = await params;
-  const decodedSlug = decodeURIComponent(slug);
-  const supabase = await createClient();
+export default function WebinarPage({ params }: PageProps) {
+  const { slug } = use(params);
+  const [loading, setLoading] = useState(true);
+  const [notFoundState, setNotFoundState] = useState(false);
+  const [webinar, setWebinar] = useState<Webinar | null>(null);
+  const [session, setSession] = useState<WebinarSession | null>(null);
+  const [derivedStatus, setDerivedStatus] = useState<'WAITING' | 'LIVE' | 'ENDED'>('WAITING');
 
-  // 1. Fetch webinar by slug
-  const { data: webinar, error } = await supabase
-    .from('webinars')
-    .select('*')
-    .eq('slug', decodedSlug)
-    .single();
+  useEffect(() => {
+    async function loadWebinar() {
+      const decodedSlug = decodeURIComponent(slug);
+      const supabase = createClient();
 
-  if (error || !webinar) {
+      const { data: w, error } = await supabase
+        .from('webinars')
+        .select('*')
+        .eq('slug', decodedSlug)
+        .single();
+
+      if (error || !w) {
+        setNotFoundState(true);
+        setLoading(false);
+        return;
+      }
+
+      setWebinar(w);
+
+      let status = w.status as 'WAITING' | 'LIVE' | 'ENDED';
+      if (w.scheduled_start) {
+        const startTime = new Date(w.scheduled_start).getTime();
+        const durationMs = (w.duration_minutes || 60) * 60 * 1000;
+        const endTime = startTime + durationMs;
+        const now = Date.now();
+
+        if (now < startTime) {
+          status = 'WAITING';
+        } else if (now >= startTime && now < endTime) {
+          status = 'LIVE';
+        } else {
+          status = 'ENDED';
+        }
+      }
+      setDerivedStatus(status);
+
+      if (status === 'LIVE') {
+        const { data: activeSession } = await supabase
+          .from('webinar_sessions')
+          .select('*')
+          .eq('webinar_id', w.id)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        if (activeSession) {
+          setSession(activeSession);
+        }
+      }
+
+      setLoading(false);
+    }
+
+    loadWebinar();
+  }, [slug]);
+
+  if (notFoundState) {
     notFound();
   }
 
-  // 2. Compute derived status based on scheduled_start
-  let derivedStatus = webinar.status;
-  if (webinar.scheduled_start) {
-    const startTime = new Date(webinar.scheduled_start).getTime();
-    const durationMs = (webinar.duration_minutes || 60) * 60 * 1000;
-    const endTime = startTime + durationMs;
-    const now = Date.now();
-
-    if (now < startTime) {
-      derivedStatus = 'WAITING';
-    } else if (now >= startTime && now < endTime) {
-      derivedStatus = 'LIVE';
-    } else {
-      derivedStatus = 'ENDED';
-    }
-  }
-
-  // 3. Fetch active session if LIVE
-  let session: WebinarSession | null = null;
-  if (derivedStatus === 'LIVE') {
-    const { data: activeSession } = await supabase
-      .from('webinar_sessions')
-      .select('*')
-      .eq('webinar_id', webinar.id)
-      .order('started_at', { ascending: false })
-      .limit(1)
-      .single();
-    
-    if (activeSession) {
-      session = activeSession;
-    }
+  if (loading || !webinar) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center text-zinc-500">
+        Loading webinar room...
+      </div>
+    );
   }
 
   return (

@@ -1,30 +1,41 @@
-export const runtime = 'edge';
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { WebinarList } from '@/components/admin/webinar-list';
-import { checkAndStartScheduledWebinars } from '@/lib/scheduler/webinar-scheduler';
 
-export const dynamic = 'force-dynamic';
+export default function WebinarsListPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [webinars, setWebinars] = useState<any[]>([]);
 
-export default async function WebinarsListPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  useEffect(() => {
+    async function loadWebinars() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/admin/login');
+        return;
+      }
 
-  // Trigger check to automatically transition any live/scheduled webinars whose duration has ended
-  try {
-    await checkAndStartScheduledWebinars();
-  } catch (err) {
-    console.error('[WebinarsListPage] Error running scheduler check:', err);
-  }
+      // Check scheduler via API
+      fetch('/api/cron/webinar-scheduler').catch((err) => console.error('Scheduler check error:', err));
 
-  const { data: webinars } = await supabase
-    .from('webinars')
-    .select('*')
-    .order('created_at', { ascending: false });
+      const { data } = await supabase
+        .from('webinars')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      setWebinars(data || []);
+      setLoading(false);
+    }
+
+    loadWebinars();
+  }, [router]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#090A0C] text-zinc-100">
@@ -46,7 +57,11 @@ export default async function WebinarsListPage() {
             </Link>
           </div>
 
-          <WebinarList initialWebinars={webinars || []} />
+          {loading ? (
+            <div className="text-zinc-500 py-12 text-center">Loading webinars...</div>
+          ) : (
+            <WebinarList initialWebinars={webinars} />
+          )}
         </div>
       </main>
     </div>

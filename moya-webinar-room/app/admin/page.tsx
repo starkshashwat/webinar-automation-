@@ -1,34 +1,68 @@
-export const runtime = 'edge';
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { useRouter } from 'next/navigation';
 import { Users, Clock, PlayCircle, Bot, Calendar, ArrowRight } from 'lucide-react';
 import Link from 'next/link';
 import { AdminHeader } from '@/components/admin/admin-header';
 
-export const dynamic = 'force-dynamic';
+export default function AdminDashboardPage() {
+  const router = useRouter();
+  const [loading, setLoading] = useState(true);
+  const [metrics, setMetrics] = useState({
+    totalRegistrations: 0,
+    uniqueAttendees: 0,
+    totalWatchHours: '0.0',
+    aiAnswered: 0,
+    aiIgnored: 0,
+  });
+  const [recentWebinars, setRecentWebinars] = useState<any[]>([]);
 
-export default async function AdminDashboardPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  useEffect(() => {
+    async function loadData() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/admin/login');
+        return;
+      }
 
-  // Fetch registrations, webinars, and AI interactions
-  const [regCountRes, attendanceRes, webinarsRes, aiRes] = await Promise.all([
-    supabase.from('webinar_registrations').select('*', { count: 'exact', head: true }),
-    supabase.from('attendance_sessions').select('watch_time_seconds, registration_id'),
-    supabase.from('webinars').select('id, title, status, scheduled_start, ai_enabled').order('created_at', { ascending: false }).limit(5),
-    supabase.from('ai_interactions').select('status, response_mode').limit(500),
-  ]);
+      try {
+        const [regCountRes, attendanceRes, webinarsRes, aiRes] = await Promise.all([
+          supabase.from('webinar_registrations').select('*', { count: 'exact', head: true }),
+          supabase.from('attendance_sessions').select('watch_time_seconds, registration_id'),
+          supabase.from('webinars').select('id, title, status, scheduled_start, ai_enabled').order('created_at', { ascending: false }).limit(5),
+          supabase.from('ai_interactions').select('status, response_mode').limit(500),
+        ]);
 
-  const totalRegistrations = regCountRes.count || 0;
-  const attendance = attendanceRes.data || [];
-  const uniqueAttendees = new Set(attendance.map(a => a.registration_id)).size;
-  const totalWatchTimeSeconds = attendance.reduce((acc, curr) => acc + (curr.watch_time_seconds || 0), 0);
-  const totalWatchHours = (totalWatchTimeSeconds / 3600).toFixed(1);
+        const totalRegistrations = regCountRes.count || 0;
+        const attendance = attendanceRes.data || [];
+        const uniqueAttendees = new Set(attendance.map(a => a.registration_id)).size;
+        const totalWatchTimeSeconds = attendance.reduce((acc, curr) => acc + (curr.watch_time_seconds || 0), 0);
+        const totalWatchHours = (totalWatchTimeSeconds / 3600).toFixed(1);
 
-  const aiStats = aiRes.data || [];
-  const aiAnswered = aiStats.filter(s => s.status === 'processed').length;
-  const aiIgnored = aiStats.filter(s => s.status === 'ignored').length;
+        const aiStats = aiRes.data || [];
+        const aiAnswered = aiStats.filter(s => s.status === 'processed').length;
+        const aiIgnored = aiStats.filter(s => s.status === 'ignored').length;
+
+        setMetrics({
+          totalRegistrations,
+          uniqueAttendees,
+          totalWatchHours,
+          aiAnswered,
+          aiIgnored,
+        });
+        setRecentWebinars(webinarsRes.data || []);
+      } catch (err) {
+        console.error('Failed to load dashboard data:', err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, [router]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#090A0C] text-zinc-100">
@@ -48,7 +82,7 @@ export default async function AdminDashboardPage() {
                 <Users className="w-5 h-5 text-blue-500" />
                 <span className="font-semibold text-sm">Total Registrations</span>
               </div>
-              <div className="text-3xl font-bold text-white">{totalRegistrations}</div>
+              <div className="text-3xl font-bold text-white">{loading ? '...' : metrics.totalRegistrations}</div>
             </div>
             
             <div className="bg-[#121419] border border-zinc-800 p-5 rounded-2xl shadow-xl">
@@ -56,7 +90,7 @@ export default async function AdminDashboardPage() {
                 <PlayCircle className="w-5 h-5 text-indigo-500" />
                 <span className="font-semibold text-sm">Unique Attendees</span>
               </div>
-              <div className="text-3xl font-bold text-white">{uniqueAttendees}</div>
+              <div className="text-3xl font-bold text-white">{loading ? '...' : metrics.uniqueAttendees}</div>
             </div>
 
             <div className="bg-[#121419] border border-zinc-800 p-5 rounded-2xl shadow-xl">
@@ -64,7 +98,7 @@ export default async function AdminDashboardPage() {
                 <Clock className="w-5 h-5 text-emerald-500" />
                 <span className="font-semibold text-sm">Total Watch Time</span>
               </div>
-              <div className="text-3xl font-bold text-white">{totalWatchHours}h</div>
+              <div className="text-3xl font-bold text-white">{loading ? '...' : `${metrics.totalWatchHours}h`}</div>
             </div>
 
             <div className="bg-[#121419] border border-zinc-800 p-5 rounded-2xl shadow-xl">
@@ -72,8 +106,8 @@ export default async function AdminDashboardPage() {
                 <Bot className="w-5 h-5 text-purple-500" />
                 <span className="font-semibold text-sm">AI Questions Answered</span>
               </div>
-              <div className="text-3xl font-bold text-white">{aiAnswered}</div>
-              <div className="text-xs text-zinc-500 mt-1">{aiIgnored} greetings/emojis ignored</div>
+              <div className="text-3xl font-bold text-white">{loading ? '...' : metrics.aiAnswered}</div>
+              <div className="text-xs text-zinc-500 mt-1">{metrics.aiIgnored} greetings/emojis ignored</div>
             </div>
           </div>
 
@@ -91,7 +125,7 @@ export default async function AdminDashboardPage() {
               </div>
 
               <div className="divide-y divide-zinc-800/50">
-                {webinarsRes.data?.map((w) => (
+                {recentWebinars.map((w) => (
                   <div key={w.id} className="py-3.5 flex items-center justify-between">
                     <div>
                       <h4 className="font-semibold text-white text-sm">{w.title}</h4>
@@ -116,7 +150,7 @@ export default async function AdminDashboardPage() {
                     </div>
                   </div>
                 ))}
-                {!webinarsRes.data?.length && (
+                {!recentWebinars.length && !loading && (
                   <p className="text-sm text-zinc-500 py-6 text-center">No webinars created yet.</p>
                 )}
               </div>

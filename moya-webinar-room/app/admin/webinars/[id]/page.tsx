@@ -1,32 +1,63 @@
-export const runtime = 'edge';
-import { createClient } from '@/lib/supabase/server';
-import { redirect } from 'next/navigation';
+'use client';
+
+import { useEffect, useState, use } from 'react';
+import { useRouter } from 'next/navigation';
+import { createClient } from '@/lib/supabase/client';
 import { AdminHeader } from '@/components/admin/admin-header';
 import { HostStudio } from '@/components/admin/host-studio';
 import { WebinarAnalytics } from '@/components/admin/webinar-analytics';
-import { checkAndStartScheduledWebinars } from '@/lib/scheduler/webinar-scheduler';
 import { Rocket } from 'lucide-react';
 import Link from 'next/link';
 
-export const dynamic = 'force-dynamic';
+export default function AdminDashboard({ params }: { params: Promise<{ id: string }> }) {
+  const router = useRouter();
+  const { id } = use(params);
+  const [loading, setLoading] = useState(true);
+  const [webinar, setWebinar] = useState<any>(null);
+  const [session, setSession] = useState<any>(null);
 
-export default async function AdminDashboard({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/admin/login');
+  useEffect(() => {
+    async function loadWebinar() {
+      const supabase = createClient();
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        router.push('/admin/login');
+        return;
+      }
 
-  try {
-    await checkAndStartScheduledWebinars();
-  } catch (err) {
-    console.error('[AdminDashboard] Error checking scheduler:', err);
+      fetch('/api/cron/webinar-scheduler').catch((err) => console.error('Scheduler check error:', err));
+
+      const { data: w } = await supabase
+        .from('webinars')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (w) {
+        setWebinar(w);
+        const { data: s } = await supabase
+          .from('webinar_sessions')
+          .select('*')
+          .eq('webinar_id', w.id)
+          .order('started_at', { ascending: false })
+          .limit(1)
+          .single();
+        setSession(s);
+      }
+      setLoading(false);
+    }
+
+    loadWebinar();
+  }, [id, router]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col h-screen bg-[#090A0C] text-zinc-100">
+        <AdminHeader />
+        <div className="flex-1 flex items-center justify-center text-zinc-500">Loading webinar host room...</div>
+      </div>
+    );
   }
-
-  const { data: webinar } = await supabase
-    .from('webinars')
-    .select('*')
-    .eq('id', id)
-    .single();
 
   if (!webinar) {
     return (
@@ -45,16 +76,6 @@ export default async function AdminDashboard({ params }: { params: Promise<{ id:
       </div>
     );
   }
-
-  const { data: session } = await supabase
-    .from('webinar_sessions')
-    .select('*')
-    .eq('webinar_id', webinar.id)
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .single();
-
-  // Manual campaigns feature was removed
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#090A0C] text-zinc-100">
