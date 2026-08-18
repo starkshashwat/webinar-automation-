@@ -1,3 +1,4 @@
+export const runtime = 'edge';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { WebinarSettings } from '@/components/settings/webinar-settings';
