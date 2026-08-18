@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
-import { processCampaigns } from '@/lib/scheduler/campaign-runner';
+import { processAIBroadcasts } from '@/lib/scheduler/ai-broadcaster';
+
+export const dynamic = 'force-dynamic';
 
 // This endpoint should be called by Vercel Cron or another external scheduler
 // typically every 1 minute.
@@ -11,10 +13,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processCampaigns();
-    return NextResponse.json(result);
+    const aiBroadcastsResult = await processAIBroadcasts();
+    return NextResponse.json({ aiBroadcasts: aiBroadcastsResult });
   } catch (err) {
     console.error('Tick error:', err);
-    return NextResponse.json({ error: 'Failed to process campaigns' }, { status: 500 });
+    return NextResponse.json({ error: 'Failed to process AI broadcasts' }, { status: 500 });
   }
 }

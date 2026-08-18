@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Bot, Power, PowerOff } from 'lucide-react';
 
 export function AIControl({ 
@@ -12,6 +12,15 @@ export function AIControl({
 }) {
   const [enabled, setEnabled] = useState(initialEnabled);
   const [loading, setLoading] = useState(false);
+
+  // Poll the backend periodically when AI is enabled to trigger broadcasts
+  useEffect(() => {
+    if (!enabled) return;
+    const interval = setInterval(() => {
+      fetch('/api/cta/tick', { cache: 'no-store' }).catch(() => {});
+    }, 10000); // Check every 10s
+    return () => clearInterval(interval);
+  }, [enabled]);
 
   const toggleAI = async () => {
     setLoading(true);

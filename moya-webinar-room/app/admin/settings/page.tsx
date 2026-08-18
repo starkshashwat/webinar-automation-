@@ -2,7 +2,6 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { WebinarSettings } from '@/components/settings/webinar-settings';
 import { KnowledgeBase } from '@/components/settings/knowledge-base';
-import { CtaSettings } from '@/components/settings/cta-settings';
 import { AdminHeader } from '@/components/admin/admin-header';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +34,6 @@ export default async function SettingsPage() {
           {webinar && (
             <>
               <KnowledgeBase webinarId={webinar.id} />
-              <CtaSettings webinarId={webinar.id} />
             </>
           )}
         </div>

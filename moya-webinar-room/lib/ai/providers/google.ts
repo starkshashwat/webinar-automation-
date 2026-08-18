@@ -106,6 +106,7 @@ export class GoogleProvider implements AIProvider {
         matchedResourceId: parsed.matched_resource_id,
         activeResources: resources,
         isPrivateIntentDetected: isPrivateByPattern,
+        webinar: options.webinar,
       });
 
       if (guardrailResult.finalResponseMode === 'no_response' || !guardrailResult.finalResponse) {

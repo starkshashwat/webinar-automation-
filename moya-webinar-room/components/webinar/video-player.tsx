@@ -111,15 +111,18 @@ export function VideoPlayer({
           loop
           muted={isMuted}
           playsInline
-          className="w-full h-full object-contain pointer-events-none"
+          className="w-full h-full object-contain"
         />
       ) : (
         <iframe
           src={embedUrl}
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-          className="absolute inset-0 h-full w-full border-0 pointer-events-none"
+          className="absolute inset-0 h-full w-full border-0"
         />
       )}
+
+      {/* Invisible overlay to prevent clicking/pausing the video (to enforce 'Live' illusion) */}
+      <div className="absolute inset-0 z-10 bg-transparent" />
 
       {/* Chat Overlay for Fullscreen or Mobile */}
       {sessionId && status === 'LIVE' && (

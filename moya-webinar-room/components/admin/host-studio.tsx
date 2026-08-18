@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { type Webinar, type WebinarSession } from '@/types/webinar';
 import { AIControl } from '@/components/admin/ai-control';
-import { CampaignControl } from '@/components/admin/campaign-control';
+import { BroadcastControl } from '@/components/admin/broadcast-control';
 import { AdminChatContainer } from '@/components/admin/admin-chat-container';
 import { VideoPlayer } from '@/components/webinar/video-player';
 import { createClient } from '@/lib/supabase/client';
@@ -13,11 +13,9 @@ import Link from 'next/link';
 export function HostStudio({
   initialWebinar,
   initialSession,
-  initialCampaign
 }: {
   initialWebinar: Webinar;
   initialSession: WebinarSession | null;
-  initialCampaign: any;
 }) {
   const [webinar, setWebinar] = useState<Webinar>(initialWebinar);
   const [session, setSession] = useState<WebinarSession | null>(initialSession);
@@ -335,10 +333,10 @@ export function HostStudio({
             </div>
           </div>
 
-          {/* Bottom Controls: AI & CTA Campaigns */}
+          {/* Bottom Controls: AI Autopilot & AI Broadcast Controller */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+            <BroadcastControl webinar={webinar} session={session} />
             <AIControl webinarId={webinar.id} initialEnabled={webinar.ai_enabled !== false} />
-            <CampaignControl campaign={initialCampaign} />
           </div>
 
         </div>

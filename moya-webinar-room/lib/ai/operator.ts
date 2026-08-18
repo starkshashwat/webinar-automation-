@@ -104,6 +104,7 @@ export async function processChatMessage(params: ProcessChatMessageParams): Prom
     // 7. Generate Response with LLM & Guardrails
     const result = await generateAIResponse({
       webinar,
+      session,
       settings,
       knowledge,
       resources,

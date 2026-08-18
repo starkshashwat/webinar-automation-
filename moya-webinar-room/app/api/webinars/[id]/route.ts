@@ -79,6 +79,12 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
       ...(duration_minutes !== undefined && { duration_minutes }),
       ...(course_url !== undefined && { course_url }),
       ...(ai_enabled !== undefined && { ai_enabled }),
+      ...(body.course_pitch_enabled !== undefined && { course_pitch_enabled: body.course_pitch_enabled }),
+      ...(body.course_pitch_delay_minutes !== undefined && { course_pitch_delay_minutes: body.course_pitch_delay_minutes }),
+      ...(body.ai_cta_broadcast_max_count !== undefined && { ai_cta_broadcast_max_count: body.ai_cta_broadcast_max_count }),
+      ...(body.ai_cta_broadcast_batch_size !== undefined && { ai_cta_broadcast_batch_size: body.ai_cta_broadcast_batch_size }),
+      ...(body.ai_cta_broadcast_interval_minutes !== undefined && { ai_cta_broadcast_interval_minutes: body.ai_cta_broadcast_interval_minutes }),
+      ...(body.ai_cta_broadcast_prompt !== undefined && { ai_cta_broadcast_prompt: body.ai_cta_broadcast_prompt }),
       ...(newStatus !== undefined && { status: newStatus }),
       ...(resetStartedAt && { started_at: null, actual_start_at: null, actual_end_at: null }),
       updated_at: new Date().toISOString()

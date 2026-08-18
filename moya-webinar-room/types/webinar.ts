@@ -17,7 +17,15 @@ export interface Webinar {
   status: WebinarStatus;
   course_url: string | null;
   ai_enabled: boolean;
+  course_pitch_enabled: boolean;
+  course_pitch_delay_minutes: number;
+  ai_cta_broadcast_max_count?: number;
+  ai_cta_broadcast_batch_size?: number;
+  ai_cta_broadcast_interval_minutes?: number;
+  ai_cta_broadcast_prompt?: string | null;
   started_at?: string | null;
+  actual_start_at?: string | null;
+  actual_end_at?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -7,6 +7,7 @@ export interface GuardrailValidationInput {
   matchedResourceId?: string | null;
   activeResources: AIResource[];
   isPrivateIntentDetected?: boolean;
+  webinar?: any;
 }
 
 export interface GuardrailValidationResult {
@@ -27,7 +28,8 @@ export function applyGuardrails(input: GuardrailValidationInput): GuardrailValid
     responseMode,
     matchedResourceId,
     activeResources,
-    isPrivateIntentDetected
+    isPrivateIntentDetected,
+    webinar
   } = input;
 
   if (!rawResponse || responseMode === 'no_response') {
@@ -74,6 +76,19 @@ export function applyGuardrails(input: GuardrailValidationInput): GuardrailValid
   const detectedUrls = sanitizedText.match(URL_REGEX) || [];
   const approvedUrls = activeResources.map((r) => r.url.trim().toLowerCase());
 
+  // Also approve the webinar's direct course URL if set
+  if (webinar?.course_url) {
+    approvedUrls.push(webinar.course_url.trim().toLowerCase());
+  }
+
+  // Also approve any URLs explicitly configured in the broadcast prompt
+  if (webinar?.ai_cta_broadcast_prompt) {
+    const promptUrls = (webinar.ai_cta_broadcast_prompt as string).match(URL_REGEX) || [];
+    for (const pUrl of promptUrls) {
+      approvedUrls.push(pUrl.trim().toLowerCase());
+    }
+  }
+
   for (const url of detectedUrls) {
     const cleanUrl = url.replace(/[),.;]+$/, ''); // strip trailing punctuation
     const isApproved = approvedUrls.some((appUrl) => cleanUrl.toLowerCase().includes(appUrl) || appUrl.includes(cleanUrl.toLowerCase()));
@@ -82,6 +97,8 @@ export function applyGuardrails(input: GuardrailValidationInput): GuardrailValid
       // Remove or replace the hallucinated URL
       if (matchedResourceUrl) {
         sanitizedText = sanitizedText.replace(url, matchedResourceUrl);
+      } else if (webinar?.course_url) {
+        sanitizedText = sanitizedText.replace(url, webinar.course_url);
       } else {
         sanitizedText = sanitizedText.replace(url, '[link provided in webinar description]');
       }

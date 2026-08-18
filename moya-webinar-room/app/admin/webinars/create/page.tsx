@@ -23,6 +23,15 @@ export default function CreateWebinarPage() {
     daily_start_time: '11:00',
     course_url: '',
     ai_enabled: true,
+    course_pitch_enabled: false,
+    course_pitch_delay_minutes: 45,
+    ai_cta_broadcast_batch_size: 1,
+    ai_cta_broadcast_interval_minutes: 5,
+    ai_cta_broadcast_max_count: 3,
+    ai_cta_broadcast_prompt: `### AI Broadcast Instructions
+When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the public chat.
+- Always include the exact payment/course link.
+- Focus on value, student results, bonuses, and limited availability.`,
   });
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -51,11 +60,9 @@ export default function CreateWebinarPage() {
       if (formData.schedule_type === 'one_time' && formData.scheduled_start) {
         finalScheduledStart = new Date(formData.scheduled_start).toISOString();
       } else if (formData.schedule_type === 'daily' && formData.daily_start_time) {
-        // Calculate today's session timestamp for daily schedule
         const [hours, minutes] = formData.daily_start_time.split(':').map(Number);
         const target = new Date();
         target.setHours(hours || 0, minutes || 0, 0, 0);
-        // If time has passed today, schedule for next day
         if (target.getTime() < Date.now()) {
           target.setDate(target.getDate() + 1);
         }
@@ -76,6 +83,12 @@ export default function CreateWebinarPage() {
         scheduled_start: finalScheduledStart,
         course_url: formData.course_url,
         ai_enabled: formData.ai_enabled,
+        course_pitch_enabled: formData.course_pitch_enabled,
+        course_pitch_delay_minutes: Number(formData.course_pitch_delay_minutes),
+        ai_cta_broadcast_batch_size: Number(formData.ai_cta_broadcast_batch_size) || 1,
+        ai_cta_broadcast_interval_minutes: Number(formData.ai_cta_broadcast_interval_minutes) || 5,
+        ai_cta_broadcast_max_count: Number(formData.ai_cta_broadcast_max_count) || 3,
+        ai_cta_broadcast_prompt: formData.ai_cta_broadcast_prompt,
       };
 
       const res = await fetch('/api/webinars', {
@@ -297,22 +310,115 @@ export default function CreateWebinarPage() {
             <div className="h-px bg-zinc-800" />
 
             {/* AI Operator Switch */}
-            <div className="flex items-center justify-between p-4 bg-zinc-900/60 rounded-xl border border-zinc-800">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-purple-600/20 text-purple-400 rounded-lg flex items-center justify-center">
-                  <Bot className="w-5 h-5" />
+            <div className="flex flex-col gap-4 p-4 bg-zinc-900/60 rounded-xl border border-zinc-800">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 bg-purple-600/20 text-purple-400 rounded-lg flex items-center justify-center">
+                    <Bot className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="font-semibold text-sm text-white">Enable AI Webinar Operator</div>
+                    <div className="text-xs text-zinc-400">AI monitors live chat, answers questions, and shares resources</div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-semibold text-sm text-white">Enable AI Webinar Operator</div>
-                  <div className="text-xs text-zinc-400">AI monitors live chat, answers questions, and shares resources</div>
-                </div>
+                <input
+                  type="checkbox"
+                  checked={formData.ai_enabled}
+                  onChange={(e) => setFormData({ ...formData, ai_enabled: e.target.checked })}
+                  className="w-5 h-5 rounded text-blue-600 bg-zinc-900 border-zinc-700 focus:ring-0 cursor-pointer"
+                />
               </div>
-              <input
-                type="checkbox"
-                checked={formData.ai_enabled}
-                onChange={(e) => setFormData({ ...formData, ai_enabled: e.target.checked })}
-                className="w-5 h-5 rounded text-blue-600 bg-zinc-900 border-zinc-700 focus:ring-0 cursor-pointer"
-              />
+              
+              {formData.ai_enabled && (
+                <div className="pt-4 border-t border-zinc-800 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-sm text-white">Time-Gated Course Pitch</div>
+                      <div className="text-xs text-zinc-400">Hide course sales info until a specific time during the webinar</div>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={formData.course_pitch_enabled}
+                      onChange={(e) => setFormData({ ...formData, course_pitch_enabled: e.target.checked })}
+                      className="w-5 h-5 rounded text-purple-600 bg-zinc-900 border-zinc-700 focus:ring-0 cursor-pointer"
+                    />
+                  </div>
+
+                  {formData.course_pitch_enabled && (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">Pitch Delay (Minutes)</label>
+                          <div className="text-[11px] text-zinc-500">Wait time after webinar starts before pitch unlocks</div>
+                          <input
+                            type="number"
+                            min="0"
+                            value={formData.course_pitch_delay_minutes}
+                            onChange={(e) => setFormData({ ...formData, course_pitch_delay_minutes: parseInt(e.target.value) || 0 })}
+                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                          />
+                        </div>
+
+                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">Messages Sent at Once (Batch Size)</label>
+                          <div className="text-[11px] text-zinc-500">Number of CTA messages sent in each wave (1-5)</div>
+                          <input
+                            type="number"
+                            min="1"
+                            max="5"
+                            value={formData.ai_cta_broadcast_batch_size}
+                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_batch_size: parseInt(e.target.value) || 1 })}
+                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                          />
+                        </div>
+
+                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">Delay Between Broadcast Sets (Minutes)</label>
+                          <div className="text-[11px] text-zinc-500">Wait time before broadcasting the next set of messages</div>
+                          <input
+                            type="number"
+                            min="1"
+                            max="60"
+                            value={formData.ai_cta_broadcast_interval_minutes}
+                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_interval_minutes: parseInt(e.target.value) || 1 })}
+                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                          />
+                        </div>
+
+                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
+                          <label className="text-xs font-semibold text-zinc-200">Total Max CTA Broadcasts</label>
+                          <div className="text-[11px] text-zinc-500">Total maximum CTA messages to broadcast before stopping</div>
+                          <input
+                            type="number"
+                            min="1"
+                            max="50"
+                            value={formData.ai_cta_broadcast_max_count}
+                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_max_count: parseInt(e.target.value) || 1 })}
+                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2 bg-black/40 p-3.5 rounded-xl border border-zinc-800/60">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-semibold text-zinc-200">AI Broadcast Instructions & Custom Prompt</label>
+                          <span className="text-[10px] text-purple-400 font-medium">Combines with your Course URL</span>
+                        </div>
+                        <p className="text-[11px] text-zinc-400 leading-relaxed">
+                          Provide details about the course, bonuses, student results, and scarcity. The AI will craft dynamic, persuasive CTAs and always inject your entered payment URL into every message.
+                        </p>
+                        <textarea
+                          rows={4}
+                          placeholder="e.g. Highlight the fast-action bonuses for the first 10 students and emphasize the 30-day guarantee..."
+                          value={formData.ai_cta_broadcast_prompt}
+                          onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_prompt: e.target.value })}
+                          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm leading-relaxed"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-3 pt-2">

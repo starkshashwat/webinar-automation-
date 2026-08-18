@@ -53,13 +53,7 @@ export default async function AdminDashboard({ params }: { params: Promise<{ id:
     .limit(1)
     .single();
 
-  const { data: campaign } = await supabase
-    .from('campaigns')
-    .select('*')
-    .eq('webinar_id', webinar.id)
-    .order('created_at', { ascending: false })
-    .limit(1)
-    .single();
+  // Manual campaigns feature was removed
 
   return (
     <div className="flex flex-col h-screen overflow-hidden bg-[#090A0C] text-zinc-100">
@@ -70,7 +64,6 @@ export default async function AdminDashboard({ params }: { params: Promise<{ id:
         <HostStudio 
           initialWebinar={webinar}
           initialSession={session}
-          initialCampaign={campaign}
         />
       )}
     </div>

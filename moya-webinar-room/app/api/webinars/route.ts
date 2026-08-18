@@ -69,6 +69,12 @@ export async function POST(request: Request) {
       duration_minutes: duration_minutes || 60,
       course_url: course_url || null,
       ai_enabled: ai_enabled !== undefined ? ai_enabled : true,
+      course_pitch_enabled: body.course_pitch_enabled !== undefined ? body.course_pitch_enabled : false,
+      course_pitch_delay_minutes: body.course_pitch_delay_minutes || 45,
+      ai_cta_broadcast_max_count: body.ai_cta_broadcast_max_count || 3,
+      ai_cta_broadcast_batch_size: body.ai_cta_broadcast_batch_size || 1,
+      ai_cta_broadcast_interval_minutes: body.ai_cta_broadcast_interval_minutes || 5,
+      ai_cta_broadcast_prompt: body.ai_cta_broadcast_prompt || null,
       status: 'WAITING'
     };
 

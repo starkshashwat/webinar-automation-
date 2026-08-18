@@ -1,5 +1,6 @@
 import { createAdminClient } from '@/lib/supabase/server';
 import { defaultWebinarProvider } from '@/lib/webinar/provider';
+import { processAIBroadcasts } from '@/lib/scheduler/ai-broadcaster';
 
 export async function checkAndStartScheduledWebinars(): Promise<{
   startedCount: number;
@@ -115,6 +116,13 @@ export async function checkAndStartScheduledWebinars(): Promise<{
         endedCount++;
       }
     }
+  }
+
+  // 3. Process AI broadcasts for live webinars
+  try {
+    await processAIBroadcasts();
+  } catch (err) {
+    console.error('[Webinar Scheduler] Error running AI broadcasts:', err);
   }
 
   return { startedCount, endedCount };
