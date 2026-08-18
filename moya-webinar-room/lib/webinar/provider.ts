@@ -20,7 +20,9 @@ export interface WebinarProvider {
 }
 
 export class SupabaseWebinarProvider implements WebinarProvider {
-  private supabase = createAdminClient();
+  private get supabase() {
+    return createAdminClient();
+  }
 
   async startWebinar(webinarId: string): Promise<void> {
     const now = new Date().toISOString();
