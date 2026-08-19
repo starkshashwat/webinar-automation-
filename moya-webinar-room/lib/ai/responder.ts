@@ -315,9 +315,11 @@ Please generate the promotional CTA message and output a valid JSON object with 
     if (result.status === 'processed' && result.response) {
       return result.response;
     }
-    return null;
+
+    console.warn('[AI Responder] LLM generation failed or key missing (' + (result.errorMessage || 'unknown') + '), using resilient fallback CTA.');
+    return `🚨 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity. Click the link below to get instant access:\n\n👉 ${exactCourseUrl}`;
   } catch (error) {
     console.error('[AI Responder] Failed to generate broadcast CTA:', error);
-    return null;
+    return `🚨 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity. Click the link below to get instant access:\n\n👉 ${exactCourseUrl}`;
   }
 }
