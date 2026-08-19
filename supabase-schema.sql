@@ -132,12 +132,16 @@ CREATE TABLE IF NOT EXISTS ai_settings (
   ai_name TEXT NOT NULL DEFAULT 'MOYA Webinar Assistant',
   provider TEXT NOT NULL DEFAULT 'google',
   api_key TEXT,
+  api_base_url TEXT,
   model TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
   system_instructions TEXT NOT NULL DEFAULT 'You are the official webinar assistant. Answer attendee questions clearly and concisely. Use only the provided webinar knowledge. Never invent information. Never invent URLs. If you do not know the answer, say that you do not have enough information and ask the attendee to contact the team. Do not make promises about refunds, payments, access, or account issues. Do not reveal private attendee information. Keep responses short because this is a live webinar chat.',
   is_enabled_globally BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure column exists if table was previously created without it
+ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS api_base_url TEXT;
 
 -- Insert default ai_settings record
 INSERT INTO ai_settings (id, ai_name, provider, model, system_instructions, is_enabled_globally)
