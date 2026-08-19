@@ -1,4 +1,3 @@
-export const runtime = 'edge';
 import { NextResponse } from 'next/server';
 import { processAIBroadcasts } from '@/lib/scheduler/ai-broadcaster';
 
