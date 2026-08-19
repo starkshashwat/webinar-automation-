@@ -1,75 +1,33 @@
-import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-export async function middleware(request: NextRequest) {
-  try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+export function middleware(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
 
-    if (!supabaseUrl || !supabaseAnonKey) {
-      return NextResponse.next();
-    }
+  // Check if a Supabase auth token cookie exists
+  const cookies = request.cookies.getAll();
+  const hasAuthCookie = cookies.some(
+    (c) => c.name.includes('auth-token') || c.name.includes('sb-')
+  );
 
-    let response = NextResponse.next({
-      request: {
-        headers: request.headers,
-      },
-    });
-
-    const supabase = createServerClient(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        cookies: {
-          getAll() {
-            return request.cookies.getAll();
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value }) => {
-              request.cookies.set(name, value);
-            });
-            response = NextResponse.next({
-              request: {
-                headers: request.headers,
-              },
-            });
-            cookiesToSet.forEach(({ name, value, options }) => {
-              response.cookies.set(name, value, options);
-            });
-          },
-        },
-      }
-    );
-
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    const pathname = request.nextUrl.pathname;
-
-    // Redirect unauthenticated users trying to access admin pages
-    if (
-      !user &&
-      pathname.startsWith('/admin') &&
-      !pathname.startsWith('/admin/login')
-    ) {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin/login';
-      return NextResponse.redirect(url);
-    }
-
-    // Redirect authenticated users away from login page to admin dashboard
-    if (user && pathname === '/admin/login') {
-      const url = request.nextUrl.clone();
-      url.pathname = '/admin';
-      return NextResponse.redirect(url);
-    }
-
-    return response;
-  } catch (error) {
-    console.error('Middleware error (safely continuing):', error);
-    return NextResponse.next();
+  // Redirect unauthenticated users trying to access admin pages
+  if (
+    !hasAuthCookie &&
+    pathname.startsWith('/admin') &&
+    !pathname.startsWith('/admin/login')
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = '/admin/login';
+    return NextResponse.redirect(url);
   }
+
+  // Redirect authenticated users from login to dashboard
+  if (hasAuthCookie && pathname === '/admin/login') {
+    const url = request.nextUrl.clone();
+    url.pathname = '/admin';
+    return NextResponse.redirect(url);
+  }
+
+  return NextResponse.next();
 }
 
 export const config = {
