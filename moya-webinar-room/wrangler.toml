@@ -1,11 +1,7 @@
 name = "webinar-automation"
-main = ".open-next/worker.js"
+pages_build_output_dir = ".open-next/pages-output"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-[assets]
-directory = ".open-next/assets"
-binding = "ASSETS"
-
 [vars]
-NODE_VERSION = "22.0.0"
+NODE_VERSION = "22"

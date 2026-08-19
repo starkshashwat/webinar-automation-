@@ -10,8 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "pages:build": "npx @opennextjs/cloudflare build && node -e \"require('fs').copyFileSync('.open-next/worker.js','.open-next/assets/_worker.js')\"",
-    "deploy": "node deploy.mjs"
+    "pages:build": "npx @opennextjs/cloudflare build && node scripts/assemble-pages.mjs",
+    "deploy": "npm run pages:build && npx wrangler pages deploy .open-next/pages-output --project-name webinar-automation"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
