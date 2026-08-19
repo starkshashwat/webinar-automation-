@@ -10,7 +10,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "pages:build": "npx @opennextjs/cloudflare build",
+    "pages:build": "npx @opennextjs/cloudflare build && node -e \"require('fs').copyFileSync('.open-next/worker.js','.open-next/assets/_worker.js')\"",
     "deploy": "node deploy.mjs"
   },
   "dependencies": {
