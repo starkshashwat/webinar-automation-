@@ -46,9 +46,9 @@ export default function SettingsPage() {
       if (res.ok) {
         if (data.domains) setDomains(data.domains);
         if (data.platformSettings) {
-          setBrandName(data.platformSettings.brand_name || 'MOYA Live');
-          setLogoUrl(data.platformSettings.logo_url || '');
-          setFaviconUrl(data.platformSettings.favicon_url || '');
+          setBrandName(data.platformSettings.brand_name ?? 'MOYA Live');
+          setLogoUrl(data.platformSettings.logo_url ?? '');
+          setFaviconUrl(data.platformSettings.favicon_url ?? '');
         }
       }
     } catch (e) {
@@ -82,7 +82,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           update_platform_settings: true,
-          brand_name: brandName.trim() || 'MOYA Live',
+          brand_name: brandName.trim(),
           logo_url: logoUrl.trim() || null,
           favicon_url: faviconUrl.trim() || null,
         })

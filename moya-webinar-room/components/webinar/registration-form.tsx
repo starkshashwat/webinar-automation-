@@ -25,9 +25,9 @@ export function RegistrationForm({
     fetch('/api/settings/domain')
       .then(res => res.json())
       .then(data => {
-        const logo = data.primaryDomain?.logo_url || data.platformSettings?.logo_url;
-        const favicon = data.primaryDomain?.favicon_url || data.platformSettings?.favicon_url;
-        const name = data.platformSettings?.brand_name || 'MOYA Live';
+        const logo = data.primaryDomain?.logo_url ?? data.platformSettings?.logo_url;
+        const favicon = data.primaryDomain?.favicon_url ?? data.platformSettings?.favicon_url;
+        const name = data.platformSettings?.brand_name ?? 'MOYA Live';
         setBranding({ logo_url: logo, brand_name: name });
 
         if (favicon) {

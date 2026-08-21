@@ -22,7 +22,7 @@ export async function GET() {
       id: 'default',
       logo_url: primaryDomain?.logo_url || null,
       favicon_url: primaryDomain?.favicon_url || null,
-      brand_name: 'MOYA Live'
+      brand_name: platformRes.data?.brand_name ?? 'MOYA Live'
     };
 
     return NextResponse.json({ 
