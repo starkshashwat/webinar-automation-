@@ -19,8 +19,6 @@ export function WebinarRoom({
   const [showChat, setShowChat] = useState(true);
   const [isMuted, setIsMuted] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [elapsedTime, setElapsedTime] = useState('00:00:00');
-
   const [attendanceSessionId, setAttendanceSessionId] = useState<string | null>(null);
   const [activeBanner, setActiveBanner] = useState<ChatMessage | null>(null);
   const [branding, setBranding] = useState<{ logo_url?: string | null; favicon_url?: string | null; brand_name?: string | null }>({
@@ -115,26 +113,12 @@ export function WebinarRoom({
     };
   }, [session?.id, normalizedStatus, supabase]);
 
-  // Elapsed time and Heartbeat effect
+  // Heartbeat & Presence effect
   useEffect(() => {
     if (normalizedStatus !== 'LIVE' || !session?.started_at) return;
 
     const startTime = new Date(session.started_at).getTime();
-    
-    const updateTimer = () => {
-      const now = new Date().getTime();
-      const diff = Math.max(0, now - startTime);
-      
-      const hours = Math.floor(diff / (1000 * 60 * 60));
-      const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-      const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-      
-      setElapsedTime(
-        `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
-      );
-    };
 
-    updateTimer();
     // Realtime Presence Tracker for Live Watcher Synchronization
     const regId = localStorage.getItem(`moya_attendee_${webinar.id}`);
     const attendeeName = localStorage.getItem(`moya_attendee_name_${webinar.id}`) || 'Attendee';
@@ -214,7 +198,6 @@ export function WebinarRoom({
       window.removeEventListener('pagehide', sendLeaveSignal);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (presenceChannel) supabase.removeChannel(presenceChannel);
-      clearInterval(interval);
       clearInterval(heartbeatInterval);
     };
   }, [normalizedStatus, session?.started_at, attendanceSessionId, session?.id, webinar.id, supabase]);
