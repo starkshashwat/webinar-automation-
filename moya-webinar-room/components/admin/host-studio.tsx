@@ -7,7 +7,7 @@ import { BroadcastControl } from '@/components/admin/broadcast-control';
 import { AdminChatContainer } from '@/components/admin/admin-chat-container';
 import { VideoPlayer } from '@/components/webinar/video-player';
 import { createClient } from '@/lib/supabase/client';
-import { Settings, Play, Square, ExternalLink, Tv, Clock, RotateCcw, Radio, Users, History, Eye, X, Mail, Phone, BarChart } from 'lucide-react';
+import { Settings, Play, Square, ExternalLink, Tv, Clock, RotateCcw, Radio, Users, History, Eye, X, Mail, Phone, BarChart, Copy } from 'lucide-react';
 import Link from 'next/link';
 import { AttendeeJourneyModal } from './attendee-journey-modal';
 
@@ -53,9 +53,21 @@ export function HostStudio({
   const [status, setStatus] = useState<'WAITING' | 'LIVE' | 'ENDED'>(computeInitialStatus);
   const [countdown, setCountdown] = useState<string | null>(null);
   const [streamElapsed, setStreamElapsed] = useState<string>('00:00:00');
+  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
   const manuallyEndedRef = useRef(initialWebinar.status?.toUpperCase() === 'ENDED');
 
   const supabase = createClient();
+
+  useEffect(() => {
+    fetch('/api/settings/domain')
+      .then(res => res.json())
+      .then(data => {
+        if (data.primaryDomain) {
+          setPrimaryDomain(data.primaryDomain.domain);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Elapsed Live Stream Timer (Host Only)
   useEffect(() => {
@@ -455,8 +467,23 @@ export function HostStudio({
                     RESTART STREAM
                   </button>
                 )}
+                
+                <button
+                  onClick={() => {
+                    const baseUrl = primaryDomain ? `https://${primaryDomain}` : window.location.origin;
+                    const path = webinar.short_token ? `/w/${webinar.short_token}` : `/webinar/${encodeURIComponent(webinar.slug)}`;
+                    navigator.clipboard.writeText(`${baseUrl}${path}`);
+                    alert('Attendee link copied to clipboard!');
+                  }}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors border border-zinc-700/50"
+                  title="Copy Link to Clipboard"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy Link
+                </button>
+                
                 <a 
-                  href={webinar.short_token ? `/w/${webinar.short_token}` : `/webinar/${encodeURIComponent(webinar.slug)}`} 
+                  href={primaryDomain ? `https://${primaryDomain}${webinar.short_token ? `/w/${webinar.short_token}` : `/webinar/${encodeURIComponent(webinar.slug)}`}` : (webinar.short_token ? `/w/${webinar.short_token}` : `/webinar/${encodeURIComponent(webinar.slug)}`)} 
                   target="_blank" 
                   rel="noreferrer" 
                   className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-colors border border-zinc-700/50"

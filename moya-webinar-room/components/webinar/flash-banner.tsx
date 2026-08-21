@@ -17,7 +17,16 @@ export function FlashBanner({
   mode?: 'overlay' | 'sidebar';
 }) {
   const [isVisible, setIsVisible] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const durationMs = (message.metadata?.bannerDuration || 30) * 1000;
+
+  const metadata = message.metadata || {};
+  
+  // Robustly extract image URL(s) — supports multiple key formats
+  const resolvedImageUrl = metadata.imageUrl || metadata.image_url || null;
+  const resolvedImages: string[] = Array.isArray(metadata.images) && metadata.images.length > 0 
+    ? metadata.images 
+    : (resolvedImageUrl ? [resolvedImageUrl] : []);
 
   useEffect(() => {
     // Slight delay for smooth entrance animation
@@ -34,6 +43,15 @@ export function FlashBanner({
       clearTimeout(timer);
     };
   }, [onClose, durationMs]);
+
+  // Rotate images if multiple
+  useEffect(() => {
+    if (resolvedImages.length <= 1) return;
+    const interval = setInterval(() => {
+      setCurrentImageIndex(prev => (prev + 1) % resolvedImages.length);
+    }, 4000);
+    return () => clearInterval(interval);
+  }, [resolvedImages.length]);
 
   const handleClose = () => {
     setIsVisible(false);
@@ -52,10 +70,9 @@ export function FlashBanner({
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = message.message.match(urlRegex) || [];
   const primaryUrl = urls[0];
-
-  const metadata = message.metadata || {};
-  const imageUrl = metadata.imageUrl;
   const textWithoutUrl = message.message.replace(urlRegex, '').trim();
+
+  const activeImage = resolvedImages.length > 0 ? resolvedImages[currentImageIndex] : null;
 
   const cardContent = (
     <div className="relative w-full max-w-[340px] sm:max-w-[360px] bg-gradient-to-br from-indigo-950/95 via-[#121424]/95 to-[#0f172a]/95 backdrop-blur-xl border border-indigo-500/30 shadow-[0_0_40px_rgba(99,102,241,0.25)] rounded-2xl overflow-hidden transition-all duration-300">
@@ -74,14 +91,29 @@ export function FlashBanner({
       </button>
 
       {/* Image Preview (Proportional, Not Stretched) */}
-      {imageUrl && (
-        <div className="w-full bg-black/50 border-b border-white/10 p-2.5 flex justify-center items-center">
+      {activeImage && (
+        <div className="w-full bg-black/50 border-b border-white/10 p-2.5 flex justify-center items-center relative">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img 
-            src={imageUrl} 
+            src={activeImage} 
             alt="Promotion"
-            className="w-full max-h-36 object-contain rounded-lg"
+            className="w-full max-h-36 object-contain rounded-lg transition-opacity duration-500"
+            onError={(e) => {
+              // Hide image on load error
+              (e.target as HTMLImageElement).style.display = 'none';
+            }}
           />
+          {/* Image indicator dots for multiple images */}
+          {resolvedImages.length > 1 && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1">
+              {resolvedImages.map((_, idx) => (
+                <div 
+                  key={idx} 
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${idx === currentImageIndex ? 'bg-white scale-125' : 'bg-white/40'}`}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 

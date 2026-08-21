@@ -318,8 +318,8 @@ export function WebinarRoom({
                 </div>
               )}
               
-              {/* Flash Banner Floating Corner Overlay (Active in both Desktop and Mobile) */}
-              {activeBanner && (
+              {/* Flash Banner Overlay — only in fullscreen mode */}
+              {isFullscreen && activeBanner && (
                 <FlashBanner 
                   mode="overlay"
                   message={activeBanner} 
@@ -331,18 +331,26 @@ export function WebinarRoom({
           )}
         </div>
 
-        {/* Right Side Panel (Chat Box - hidden when activeBanner is showing or showChat is false) */}
+        {/* Right Side Panel (Chat Box / Flash Banner in sidebar mode) */}
         <div 
           className={`
             shrink-0 bg-[#121419] flex flex-col transition-all duration-500 ease-in-out overflow-hidden
-            ${(isFullscreen || !showChat || !!activeBanner) 
+            ${(isFullscreen || !showChat) 
               ? 'lg:w-0 lg:opacity-0 h-0 lg:h-full lg:border-l-0 opacity-0 border-t-0 pointer-events-none' 
               : 'w-full lg:w-[340px] h-[45vh] lg:h-full border-t lg:border-t-0 lg:border-l border-zinc-800 opacity-100'
             }
           `}
         >
           <div className="w-full lg:w-[340px] h-full flex flex-col min-h-0 relative">
-            {session ? (
+            {/* Flash Banner replaces chat in sidebar when active */}
+            {!isFullscreen && activeBanner ? (
+              <FlashBanner 
+                mode="sidebar"
+                message={activeBanner} 
+                onClose={() => setActiveBanner(null)}
+                onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
+              />
+            ) : session ? (
               <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-zinc-600 text-sm">

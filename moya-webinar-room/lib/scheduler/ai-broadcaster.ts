@@ -76,11 +76,20 @@ export async function processAIBroadcasts() {
         for (let i = 0; i < toSend.length; i++) {
           const b = toSend[i];
 
-          // Mark as sent in queue
-          await supabase
+          // OPTIMISTIC LOCKING: Atomically claim the item PENDING → PROCESSING
+          // Only one concurrent caller can succeed here for a given item
+          const { data: claimed, error: claimError } = await supabase
             .from('webinar_broadcast_queue')
-            .update({ status: 'SENT', updated_at: nowIso })
-            .eq('id', b.id);
+            .update({ status: 'PROCESSING', updated_at: nowIso })
+            .eq('id', b.id)
+            .eq('status', 'PENDING')  // Only update if still PENDING
+            .select('id')
+            .single();
+
+          if (claimError || !claimed) {
+            // Another concurrent call already claimed this item — skip
+            continue;
+          }
 
           const metadata = {
             type: b.display_type || 'CHAT',
@@ -98,6 +107,12 @@ export async function processAIBroadcasts() {
               message_type: 'CTA',
               metadata: metadata
             }]);
+
+          // Mark as fully SENT after successful insert
+          await supabase
+            .from('webinar_broadcast_queue')
+            .update({ status: 'SENT', updated_at: nowIso })
+            .eq('id', b.id);
 
           processedCount++;
         }
