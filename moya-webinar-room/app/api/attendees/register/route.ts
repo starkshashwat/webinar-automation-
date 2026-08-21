@@ -23,13 +23,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 });
     }
 
-    // Find or create a session for this webinar
+    // Find the most recent session for this webinar
     let { data: session } = await adminSupabase
       .from('webinar_sessions')
       .select('id')
       .eq('webinar_id', webinar_id)
+      .order('started_at', { ascending: false })
       .limit(1)
-      .single();
+      .maybeSingle();
 
     if (!session) {
       const { data: newSession, error: sessionError } = await adminSupabase
@@ -45,23 +46,37 @@ export async function POST(request: Request) {
       }
     }
 
-    // Try to find existing registration by email for this webinar (dedup)
+    // Try to find existing registration by phone for this webinar (dedup)
     let attendee: any = null;
     const trimmedEmail = email ? email.trim().toLowerCase() : null;
     const trimmedPhone = phone ? phone.trim() : null;
 
-    if (trimmedEmail) {
+    if (trimmedPhone) {
       const { data: existing } = await adminSupabase
         .from('webinar_registrations')
         .select('*')
         .eq('webinar_id', webinar_id)
-        .eq('email', trimmedEmail)
+        .eq('phone', trimmedPhone)
         .limit(1)
         .maybeSingle();
 
       if (existing) {
-        // Found existing registration — reuse it (update phone/name if changed)
-        attendee = existing;
+        // Found existing registration — reuse it and update name/email if changed
+        const updates: any = {};
+        if (existing.name !== name.trim()) updates.name = name.trim();
+        if (existing.email !== trimmedEmail) updates.email = trimmedEmail;
+
+        if (Object.keys(updates).length > 0) {
+          const { data: updated } = await adminSupabase
+            .from('webinar_registrations')
+            .update(updates)
+            .eq('id', existing.id)
+            .select()
+            .single();
+          attendee = updated || existing;
+        } else {
+          attendee = existing;
+        }
       }
     }
 
