@@ -216,7 +216,7 @@ export function HostStudio({
     };
 
     fetchLiveViewers();
-    const interval = setInterval(fetchLiveViewers, 4000);
+    const interval = setInterval(fetchLiveViewers, 1500);
 
     // Instant WebSocket Presence Channel (0ms latency sync on join/leave/PiP-close/tab-close)
     const presenceChannel = supabase.channel(`presence-${activeSessionId}`);

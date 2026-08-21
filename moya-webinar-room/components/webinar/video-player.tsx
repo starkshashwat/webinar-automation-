@@ -24,6 +24,26 @@ export function VideoPlayer({
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [initialStartSeconds, setInitialStartSeconds] = useState(0);
+  const [timeOffset, setTimeOffset] = useState<number>(0);
+
+  // Sync server time offset
+  useEffect(() => {
+    const fetchTime = async () => {
+      try {
+        const clientStart = Date.now();
+        const res = await fetch('/api/time');
+        const data = await res.json();
+        const clientEnd = Date.now();
+        const rtt = clientEnd - clientStart;
+        const estimatedServerTime = data.serverTime + (rtt / 2);
+        const offset = estimatedServerTime - clientEnd;
+        setTimeOffset(offset);
+      } catch (err) {
+        console.error('Failed to fetch server time for sync', err);
+      }
+    };
+    fetchTime();
+  }, []);
 
   // Mute effect
   useEffect(() => {
@@ -56,13 +76,13 @@ export function VideoPlayer({
     const startTimestamp = new Date(startedAt).getTime();
     
     // Calculate initial start offset for YouTube
-    const now = Date.now();
+    const now = Date.now() + timeOffset;
     const initialElapsed = Math.max(0, (now - startTimestamp) / 1000);
     setInitialStartSeconds(Math.floor(initialElapsed));
 
     // Continuous sync loop for direct <video>
     const syncInterval = setInterval(() => {
-      const currentNow = Date.now();
+      const currentNow = Date.now() + timeOffset;
       const rawTargetTime = Math.max(0, (currentNow - startTimestamp) / 1000);
 
       if (videoRef.current) {
@@ -80,8 +100,8 @@ export function VideoPlayer({
 
         const drift = Math.abs(video.currentTime - targetTime);
 
-        // If drift is greater than 2 seconds, force resync
-        if (drift > 2) {
+        // If drift is greater than 1 second, force resync (tighter real-time feel)
+        if (drift > 1) {
           video.currentTime = targetTime;
         }
 
@@ -93,7 +113,7 @@ export function VideoPlayer({
     }, 1000);
 
     return () => clearInterval(syncInterval);
-  }, [status, startedAt]);
+  }, [status, startedAt, timeOffset]);
 
   if (!url) {
     return (
