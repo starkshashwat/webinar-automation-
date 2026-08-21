@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminHeader } from '@/components/admin/admin-header';
-import { ArrowLeft, Bot, Video, Calendar, Clock, Link as LinkIcon, Sparkles } from 'lucide-react';
+import { ArrowLeft, Bot, Video, Calendar, Clock, Sparkles, MessageSquare, Tag, Zap } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CreateWebinarPage() {
@@ -11,20 +11,31 @@ export default function CreateWebinarPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Helper for min date-time (at least 2 minutes from now)
+  const getMinDateTimeLocal = () => {
+    const d = new Date(Date.now() + 2 * 60 * 1000);
+    const offset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - offset).toISOString().slice(0, 16);
+  };
+
   const [formData, setFormData] = useState({
     title: '',
     slug: '',
     description: '',
     recording_url: '',
     recording_title: '',
-    recording_duration: 60,
+    duration_hours: 1,
+    duration_minutes: 0,
+    duration_seconds: 0,
     schedule_type: 'one_time',
-    scheduled_start: '',
+    scheduled_start: getMinDateTimeLocal(),
     daily_start_time: '11:00',
     course_url: '',
     ai_enabled: true,
     course_pitch_enabled: false,
-    course_pitch_delay_minutes: 45,
+    pitch_delay_hours: 0,
+    pitch_delay_minutes: 45,
+    pitch_delay_seconds: 0,
     ai_cta_broadcast_batch_size: 1,
     ai_cta_broadcast_interval_minutes: 5,
     ai_cta_broadcast_max_count: 3,
@@ -32,6 +43,14 @@ export default function CreateWebinarPage() {
 When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the public chat.
 - Always include the exact payment/course link.
 - Focus on value, student results, bonuses, and limited availability.`,
+    ai_cta_broadcast_type: 'CHAT' as 'CHAT' | 'BANNER' | 'BOTH',
+    ai_cta_broadcast_frequency: 'EXACT',
+    ai_cta_broadcast_end_condition: 'MAX_COUNT',
+    ai_cta_broadcast_image_url: '',
+    ai_cta_broadcast_images: [] as string[],
+    ai_cta_banner_duration_seconds: 30,
+    ai_cta_banner_delay_seconds: 0,
+    ai_cta_banner_interval_minutes: 5,
   });
 
   const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -57,7 +76,18 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
     try {
       let finalScheduledStart: string | null = null;
 
-      if (formData.schedule_type === 'one_time' && formData.scheduled_start) {
+      if (formData.schedule_type === 'one_time') {
+        if (!formData.scheduled_start) {
+          throw new Error('Please select a scheduled start date and time.');
+        }
+
+        const scheduledTime = new Date(formData.scheduled_start).getTime();
+        const minAllowedTime = Date.now() + 90 * 1000; // ~1.5 - 2 minutes minimum
+
+        if (scheduledTime < minAllowedTime) {
+          throw new Error('Scheduled start time must be at least 2 minutes in the future.');
+        }
+
         finalScheduledStart = new Date(formData.scheduled_start).toISOString();
       } else if (formData.schedule_type === 'daily' && formData.daily_start_time) {
         const [hours, minutes] = formData.daily_start_time.split(':').map(Number);
@@ -69,6 +99,10 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
         finalScheduledStart = target.toISOString();
       }
 
+      if (!formData.course_url || !formData.course_url.trim()) {
+        throw new Error('Course Checkout URL is required.');
+      }
+
       const payload = {
         title: formData.title,
         slug: formData.slug,
@@ -76,19 +110,30 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
         video_url: formData.recording_url,
         recording_url: formData.recording_url,
         recording_title: formData.recording_title || formData.title,
-        recording_duration: Number(formData.recording_duration) || 60,
-        duration_minutes: Number(formData.recording_duration) || 60,
+        recording_duration: (Number(formData.duration_hours) * 60) + Number(formData.duration_minutes),
+        duration_minutes: (Number(formData.duration_hours) * 60) + Number(formData.duration_minutes),
+        duration_seconds: Number(formData.duration_seconds),
         schedule_type: formData.schedule_type,
         daily_start_time: formData.daily_start_time,
         scheduled_start: finalScheduledStart,
         course_url: formData.course_url,
         ai_enabled: formData.ai_enabled,
         course_pitch_enabled: formData.course_pitch_enabled,
-        course_pitch_delay_minutes: Number(formData.course_pitch_delay_minutes),
-        ai_cta_broadcast_batch_size: Number(formData.ai_cta_broadcast_batch_size) || 1,
-        ai_cta_broadcast_interval_minutes: Number(formData.ai_cta_broadcast_interval_minutes) || 5,
-        ai_cta_broadcast_max_count: Number(formData.ai_cta_broadcast_max_count) || 3,
+        course_pitch_delay_minutes: (Number(formData.pitch_delay_hours) * 60) + Number(formData.pitch_delay_minutes),
+        course_pitch_delay_seconds: Number(formData.pitch_delay_seconds),
+        ai_cta_broadcast_type: formData.ai_cta_broadcast_type,
+        ai_cta_broadcast_interval_minutes: formData.ai_cta_broadcast_interval_minutes,
+        ai_cta_broadcast_batch_size: formData.ai_cta_broadcast_batch_size,
+        ai_cta_broadcast_max_count: formData.ai_cta_broadcast_max_count,
         ai_cta_broadcast_prompt: formData.ai_cta_broadcast_prompt,
+        ai_cta_broadcast_frequency: formData.ai_cta_broadcast_frequency,
+        ai_cta_broadcast_end_condition: formData.ai_cta_broadcast_end_condition,
+        ai_cta_broadcast_image_url: formData.ai_cta_broadcast_images?.[0] || formData.ai_cta_broadcast_image_url || null,
+        ai_cta_broadcast_images: formData.ai_cta_broadcast_images,
+        ai_cta_banner_duration_seconds: formData.ai_cta_banner_duration_seconds,
+        ai_cta_banner_delay_seconds: formData.ai_cta_banner_delay_seconds,
+        ai_cta_banner_interval_minutes: formData.ai_cta_banner_interval_minutes,
+        status: 'WAITING',
       };
 
       const res = await fetch('/api/webinars', {
@@ -97,14 +142,14 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
       if (!res.ok) {
+        const data = await res.json();
         throw new Error(data.error || 'Failed to create webinar');
       }
 
       router.push('/admin/webinars');
     } catch (err: any) {
-      setError(err.message || 'An error occurred');
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -115,16 +160,17 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
       <AdminHeader />
 
       <main className="flex-1 p-6 lg:p-8 overflow-y-auto">
-        <div className="max-w-3xl mx-auto space-y-6">
+        <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-16">
+          {/* Header */}
           <div className="flex items-center gap-4">
             <Link
               href="/admin/webinars"
-              className="p-2 bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 rounded-xl text-zinc-400 hover:text-white transition-colors"
+              className="p-2 rounded-xl bg-zinc-900 border border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <h2 className="text-2xl font-bold text-white">Create New Webinar</h2>
+              <h1 className="text-2xl font-bold text-white">Create New Webinar</h1>
               <p className="text-zinc-400 text-sm">Configure video playback, scheduling, and AI operator</p>
             </div>
           </div>
@@ -173,9 +219,10 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                 </div>
 
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">Course / Checkout URL</label>
+                  <label className="block text-sm font-medium text-zinc-200">Course Checkout URL <span className="text-red-400">*</span></label>
                   <input
                     type="url"
+                    required
                     placeholder="https://example.com/checkout"
                     value={formData.course_url}
                     onChange={(e) => setFormData({ ...formData, course_url: e.target.value })}
@@ -219,39 +266,53 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                 />
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">Recording Title</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Masterclass Video Recording"
-                    value={formData.recording_title}
-                    onChange={(e) => setFormData({ ...formData, recording_title: e.target.value })}
-                    className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">Duration (Minutes)</label>
-                  <input
-                    type="number"
-                    min="1"
-                    required
-                    value={formData.recording_duration}
-                    onChange={(e) => setFormData({ ...formData, recording_duration: parseInt(e.target.value) || 60 })}
-                    className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2.5 text-white placeholder-zinc-600 focus:outline-none focus:border-blue-500 transition-colors"
-                  />
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-200">Video Duration (Hours, Minutes, Seconds) <span className="text-red-400">*</span></label>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="space-y-1">
+                    <span className="text-xs text-zinc-400">Hours</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="24"
+                      value={formData.duration_hours}
+                      onChange={(e) => setFormData({ ...formData, duration_hours: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-zinc-400">Minutes</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={formData.duration_minutes}
+                      onChange={(e) => setFormData({ ...formData, duration_minutes: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <span className="text-xs text-zinc-400">Seconds</span>
+                    <input
+                      type="number"
+                      min="0"
+                      max="59"
+                      value={formData.duration_seconds}
+                      onChange={(e) => setFormData({ ...formData, duration_seconds: parseInt(e.target.value) || 0 })}
+                      className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="h-px bg-zinc-800" />
 
-            {/* Scheduling Type */}
+            {/* Schedule Settings */}
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wider flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-purple-400" />
-                Schedule Settings
+                Schedule Settings (Min 2 Minutes in Future)
               </h3>
 
               <div className="grid grid-cols-2 gap-4">
@@ -284,10 +345,14 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
 
               {formData.schedule_type === 'one_time' ? (
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-zinc-200">Start Date & Time</label>
+                  <div className="flex items-center justify-between">
+                    <label className="block text-sm font-medium text-zinc-200">Start Date & Time (Minimum 2 min ahead)</label>
+                    <span className="text-[11px] text-zinc-500 font-mono">Starts automatically</span>
+                  </div>
                   <input
                     type="datetime-local"
                     required
+                    min={getMinDateTimeLocal()}
                     value={formData.scheduled_start}
                     onChange={(e) => setFormData({ ...formData, scheduled_start: e.target.value })}
                     className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-blue-500 transition-colors [color-scheme:dark]"
@@ -318,7 +383,7 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                   </div>
                   <div>
                     <div className="font-semibold text-sm text-white">Enable AI Webinar Operator</div>
-                    <div className="text-xs text-zinc-400">AI monitors live chat, answers questions, and shares resources</div>
+                    <div className="text-xs text-zinc-400">AI monitors live chat, answers questions, and delivers offers</div>
                   </div>
                 </div>
                 <input
@@ -330,11 +395,11 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
               </div>
               
               {formData.ai_enabled && (
-                <div className="pt-4 border-t border-zinc-800 space-y-4">
-                  <div className="flex items-center justify-between">
+                <div className="pt-4 border-t border-zinc-800 space-y-5">
+                  <div className="flex items-center justify-between bg-black/40 p-3.5 rounded-xl border border-zinc-800/80">
                     <div>
-                      <div className="font-semibold text-sm text-white">Time-Gated Course Pitch</div>
-                      <div className="text-xs text-zinc-400">Hide course sales info until a specific time during the webinar</div>
+                      <div className="font-semibold text-sm text-white">Enable Course / Offer Pitch</div>
+                      <div className="text-xs text-zinc-400">Unlock offers and promotions at a specific point in the webinar</div>
                     </div>
                     <input
                       type="checkbox"
@@ -345,95 +410,270 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                   </div>
 
                   {formData.course_pitch_enabled && (
-                    <div className="space-y-4">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-200">Pitch Delay (Minutes)</label>
-                          <div className="text-[11px] text-zinc-500">Wait time after webinar starts before pitch unlocks</div>
-                          <input
-                            type="number"
-                            min="0"
-                            value={formData.course_pitch_delay_minutes}
-                            onChange={(e) => setFormData({ ...formData, course_pitch_delay_minutes: parseInt(e.target.value) || 0 })}
-                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
-                          />
-                        </div>
-
-                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-200">Messages Sent at Once (Batch Size)</label>
-                          <div className="text-[11px] text-zinc-500">Number of CTA messages sent in each wave (1-5)</div>
-                          <input
-                            type="number"
-                            min="1"
-                            max="5"
-                            value={formData.ai_cta_broadcast_batch_size}
-                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_batch_size: parseInt(e.target.value) || 1 })}
-                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
-                          />
-                        </div>
-
-                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-200">Delay Between Broadcast Sets (Minutes)</label>
-                          <div className="text-[11px] text-zinc-500">Wait time before broadcasting the next set of messages</div>
-                          <input
-                            type="number"
-                            min="1"
-                            max="60"
-                            value={formData.ai_cta_broadcast_interval_minutes}
-                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_interval_minutes: parseInt(e.target.value) || 1 })}
-                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
-                          />
-                        </div>
-
-                        <div className="bg-black/40 p-3.5 rounded-xl border border-zinc-800/60 space-y-1.5">
-                          <label className="text-xs font-semibold text-zinc-200">Total Max CTA Broadcasts</label>
-                          <div className="text-[11px] text-zinc-500">Total maximum CTA messages to broadcast before stopping</div>
-                          <input
-                            type="number"
-                            min="1"
-                            max="50"
-                            value={formData.ai_cta_broadcast_max_count}
-                            onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_max_count: parseInt(e.target.value) || 1 })}
-                            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="space-y-2 bg-black/40 p-3.5 rounded-xl border border-zinc-800/60">
+                    <div className="space-y-6 pt-2">
+                      
+                      {/* 1. TOPMOST SETTING: Pitch Unlock Time */}
+                      <div className="bg-black/50 p-4 rounded-xl border border-purple-500/30 space-y-3">
                         <div className="flex items-center justify-between">
-                          <label className="text-xs font-semibold text-zinc-200">AI Broadcast Instructions & Custom Prompt</label>
-                          <span className="text-[10px] text-purple-400 font-medium">Combines with your Course URL</span>
+                          <label className="text-sm font-bold text-white flex items-center gap-2">
+                            <Clock className="w-4 h-4 text-purple-400" />
+                            1. Pitch Unlock Time (From Webinar Start)
+                          </label>
+                          <span className="text-[11px] text-purple-400 font-semibold bg-purple-500/10 border border-purple-500/20 px-2 py-0.5 rounded-md">
+                            Pitch Activation Point
+                          </span>
                         </div>
-                        <p className="text-[11px] text-zinc-400 leading-relaxed">
-                          Provide details about the course, bonuses, student results, and scarcity. The AI will craft dynamic, persuasive CTAs and always inject your entered payment URL into every message.
-                        </p>
-                        <textarea
-                          rows={4}
-                          placeholder="e.g. Highlight the fast-action bonuses for the first 10 students and emphasize the 30-day guarantee..."
-                          value={formData.ai_cta_broadcast_prompt}
-                          onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_prompt: e.target.value })}
-                          className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm leading-relaxed"
-                        />
+                        <p className="text-xs text-zinc-400">Specify exactly when the course pitch & promotion starts:</p>
+                        
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase">Hours</span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={formData.pitch_delay_hours}
+                              onChange={(e) => setFormData({ ...formData, pitch_delay_hours: parseInt(e.target.value) || 0 })}
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase">Minutes</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="59"
+                              value={formData.pitch_delay_minutes}
+                              onChange={(e) => setFormData({ ...formData, pitch_delay_minutes: parseInt(e.target.value) || 0 })}
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                            />
+                          </div>
+                          <div className="flex flex-col gap-1">
+                            <span className="text-[10px] text-zinc-400 font-bold uppercase">Seconds</span>
+                            <input
+                              type="number"
+                              min="0"
+                              max="59"
+                              value={formData.pitch_delay_seconds}
+                              onChange={(e) => setFormData({ ...formData, pitch_delay_seconds: parseInt(e.target.value) || 0 })}
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
                       </div>
+
+                      {/* 2. Pitch Display Mode Selector */}
+                      <div className="bg-black/40 p-4 rounded-xl border border-zinc-800/60 space-y-3">
+                        <label className="text-sm font-bold text-zinc-200 flex items-center gap-2">
+                          <Zap className="w-4 h-4 text-blue-400" />
+                          2. Pitch Display Mode (How to broadcast?)
+                        </label>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          {/* Option 1: Chat Only */}
+                          <div
+                            onClick={() => setFormData({ ...formData, ai_cta_broadcast_type: 'CHAT' })}
+                            className={`cursor-pointer border rounded-xl p-3.5 flex flex-col gap-2 transition-all ${
+                              formData.ai_cta_broadcast_type === 'CHAT'
+                                ? 'bg-blue-600/15 border-blue-500 ring-1 ring-blue-500 text-white'
+                                : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4 text-blue-400" />
+                              <span className="font-bold text-sm">Chat Message Only</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 leading-tight">
+                              Broadcasts promotional messages into the public chat log. No popup banners.
+                            </p>
+                          </div>
+
+                          {/* Option 2: Banner Only */}
+                          <div
+                            onClick={() => setFormData({ ...formData, ai_cta_broadcast_type: 'BANNER' })}
+                            className={`cursor-pointer border rounded-xl p-3.5 flex flex-col gap-2 transition-all ${
+                              formData.ai_cta_broadcast_type === 'BANNER'
+                                ? 'bg-purple-600/15 border-purple-500 ring-1 ring-purple-500 text-white'
+                                : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Tag className="w-4 h-4 text-purple-400" />
+                              <span className="font-bold text-sm">Flash Banner Only</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 leading-tight">
+                              Shows high-converting animated popups in corner. No chat messages.
+                            </p>
+                          </div>
+
+                          {/* Option 3: Both */}
+                          <div
+                            onClick={() => setFormData({ ...formData, ai_cta_broadcast_type: 'BOTH' })}
+                            className={`cursor-pointer border rounded-xl p-3.5 flex flex-col gap-2 transition-all ${
+                              formData.ai_cta_broadcast_type === 'BOTH'
+                                ? 'bg-emerald-600/15 border-emerald-500 ring-1 ring-emerald-500 text-white'
+                                : 'bg-zinc-900/50 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-emerald-400" />
+                              <span className="font-bold text-sm">Both Chat & Banner</span>
+                            </div>
+                            <p className="text-[11px] text-zinc-500 leading-tight">
+                              Broadcasts chat messages AND displays flash banners at their intervals.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* 3. Conditional: FLASH BANNER SETTINGS (Active when BANNER or BOTH) */}
+                      {(formData.ai_cta_broadcast_type === 'BANNER' || formData.ai_cta_broadcast_type === 'BOTH') && (
+                        <div className="bg-purple-950/20 p-4 rounded-xl border border-purple-500/30 space-y-4 animate-in fade-in duration-300">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-bold text-purple-300 flex items-center gap-2">
+                              <Tag className="w-4 h-4 text-purple-400" />
+                              Flash Banner Custom Settings
+                            </label>
+                            <span className="text-[10px] text-purple-400 font-semibold bg-purple-500/20 px-2 py-0.5 rounded-full">
+                              Popup Rules
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-zinc-300">Banner Display Duration (Seconds)</label>
+                              <div className="text-[10px] text-zinc-500">How long banner stays on screen (e.g. 30s)</div>
+                              <input
+                                type="number"
+                                min="5"
+                                max="300"
+                                value={formData.ai_cta_banner_duration_seconds}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_banner_duration_seconds: parseInt(e.target.value) || 30 })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-zinc-300">First Banner Delay (Seconds)</label>
+                              <div className="text-[10px] text-zinc-500">Delay after pitch unlock before 1st banner (e.g. 0s or 60s)</div>
+                              <input
+                                type="number"
+                                min="0"
+                                max="3600"
+                                value={formData.ai_cta_banner_delay_seconds}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_banner_delay_seconds: parseInt(e.target.value) || 0 })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-zinc-300">Banner Interval (Minutes)</label>
+                              <div className="text-[10px] text-zinc-500">Time between next banner popup (e.g. 3 min)</div>
+                              <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={formData.ai_cta_banner_interval_minutes}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_banner_interval_minutes: parseInt(e.target.value) || 5 })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
+                            <label className="text-xs font-semibold text-zinc-300">Rotating Images (Image URLs separated by comma)</label>
+                            <div className="text-[10px] text-zinc-500">Cycles through your images on every banner interval</div>
+                            <input
+                              type="text"
+                              placeholder="https://example.com/banner1.jpg, https://example.com/banner2.jpg"
+                              value={formData.ai_cta_broadcast_images?.join(', ') || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                const arr = val.split(',').map(s => s.trim()).filter(s => s !== '');
+                                setFormData({ ...formData, ai_cta_broadcast_images: arr });
+                              }}
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* 4. Conditional: CHAT BROADCAST SETTINGS (Active when CHAT or BOTH) */}
+                      {(formData.ai_cta_broadcast_type === 'CHAT' || formData.ai_cta_broadcast_type === 'BOTH') && (
+                        <div className="bg-blue-950/20 p-4 rounded-xl border border-blue-500/30 space-y-4 animate-in fade-in duration-300">
+                          <div className="flex items-center justify-between">
+                            <label className="text-sm font-bold text-blue-300 flex items-center gap-2">
+                              <MessageSquare className="w-4 h-4 text-blue-400" />
+                              Chat Broadcast Custom Settings
+                            </label>
+                            <span className="text-[10px] text-blue-400 font-semibold bg-blue-500/20 px-2 py-0.5 rounded-full">
+                              Chat Messages
+                            </span>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-zinc-300">Chat Broadcast Interval (Minutes)</label>
+                              <div className="text-[10px] text-zinc-500">Time between chat CTA messages (e.g. 5 min)</div>
+                              <input
+                                type="number"
+                                min="1"
+                                max="60"
+                                value={formData.ai_cta_broadcast_interval_minutes}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_interval_minutes: parseInt(e.target.value) || 1 })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm font-medium"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <label className="text-xs font-semibold text-zinc-300">Chat End Condition</label>
+                              <div className="text-[10px] text-zinc-500">When should chat broadcasts stop?</div>
+                              <select
+                                value={formData.ai_cta_broadcast_end_condition}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_end_condition: e.target.value })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm font-medium"
+                              >
+                                <option value="MAX_COUNT">Stop after X Times</option>
+                                <option value="WEBINAR_END">Run until Webinar Ends</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          {formData.ai_cta_broadcast_end_condition === 'MAX_COUNT' && (
+                            <div className="space-y-1.5 pt-2 border-t border-blue-500/20">
+                              <label className="text-xs font-semibold text-zinc-300">Total Max Chat Messages</label>
+                              <div className="text-[10px] text-zinc-500">Total number of chat messages sent before stopping</div>
+                              <input
+                                type="number"
+                                min="1"
+                                max="50"
+                                value={formData.ai_cta_broadcast_max_count}
+                                onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_max_count: parseInt(e.target.value) || 1 })}
+                                className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm font-medium"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                     </div>
                   )}
                 </div>
               )}
             </div>
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex justify-end gap-3 pt-4 border-t border-zinc-800">
               <Link
                 href="/admin/webinars"
-                className="px-5 py-2.5 rounded-xl text-sm font-medium text-zinc-400 hover:text-white bg-zinc-900 hover:bg-zinc-800 transition-colors"
+                className="px-5 py-2.5 rounded-xl text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
               >
                 Cancel
               </Link>
               <button
                 type="submit"
                 disabled={loading}
-                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white bg-blue-600 hover:bg-blue-500 shadow-lg shadow-blue-600/20 transition-all hover:scale-102 disabled:opacity-50"
+                className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-xl text-sm font-semibold transition-all hover:scale-102 disabled:opacity-50 shadow-lg shadow-blue-600/20"
               >
-                {loading ? 'Creating...' : 'Create & Schedule'}
+                {loading ? 'Creating...' : 'Create Webinar'}
               </button>
             </div>
           </form>

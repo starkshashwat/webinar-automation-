@@ -22,7 +22,7 @@ export async function POST(request: Request) {
       ai_name: 'test',
       system_instructions: 'test',
       is_enabled_globally: true,
-      provider: provider || 'google',
+      provider: provider || 'nvidia',
       api_base_url: api_base_url || null,
       api_key: api_key,
       model: model || '',

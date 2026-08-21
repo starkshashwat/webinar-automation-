@@ -130,10 +130,10 @@ CREATE TABLE IF NOT EXISTS chat_messages (
 CREATE TABLE IF NOT EXISTS ai_settings (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   ai_name TEXT NOT NULL DEFAULT 'MOYA Webinar Assistant',
-  provider TEXT NOT NULL DEFAULT 'google',
+  provider TEXT NOT NULL DEFAULT 'nvidia',
   api_key TEXT,
-  api_base_url TEXT,
-  model TEXT NOT NULL DEFAULT 'gemini-2.0-flash',
+  api_base_url TEXT DEFAULT 'https://integrate.api.nvidia.com/v1',
+  model TEXT NOT NULL DEFAULT 'meta/llama-3.1-8b-instruct',
   system_instructions TEXT NOT NULL DEFAULT 'You are the official webinar assistant. Answer attendee questions clearly and concisely. Use only the provided webinar knowledge. Never invent information. Never invent URLs. If you do not know the answer, say that you do not have enough information and ask the attendee to contact the team. Do not make promises about refunds, payments, access, or account issues. Do not reveal private attendee information. Keep responses short because this is a live webinar chat.',
   is_enabled_globally BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -144,12 +144,13 @@ CREATE TABLE IF NOT EXISTS ai_settings (
 ALTER TABLE ai_settings ADD COLUMN IF NOT EXISTS api_base_url TEXT;
 
 -- Insert default ai_settings record
-INSERT INTO ai_settings (id, ai_name, provider, model, system_instructions, is_enabled_globally)
+INSERT INTO ai_settings (id, ai_name, provider, api_base_url, model, system_instructions, is_enabled_globally)
 SELECT 
   '00000000-0000-0000-0000-000000000001'::UUID,
   'MOYA Webinar Assistant',
-  'google',
-  'gemini-2.0-flash',
+  'nvidia',
+  'https://integrate.api.nvidia.com/v1',
+  'meta/llama-3.1-8b-instruct',
   'You are the official webinar assistant. Answer attendee questions clearly and concisely. Use only the provided webinar knowledge. Never invent information. Never invent URLs. If you do not know the answer, say that you do not have enough information and ask the attendee to contact the team. Do not make promises about refunds, payments, access, or account issues. Do not reveal private attendee information. Keep responses short because this is a live webinar chat.',
   TRUE
 WHERE NOT EXISTS (SELECT 1 FROM ai_settings LIMIT 1);
@@ -205,6 +206,11 @@ CREATE INDEX IF NOT EXISTS idx_watch_events_attendance_id ON webinar_watch_event
 CREATE INDEX IF NOT EXISTS idx_ai_knowledge_webinar ON ai_knowledge(webinar_id);
 CREATE INDEX IF NOT EXISTS idx_ai_resources_webinar ON ai_resources(webinar_id);
 CREATE INDEX IF NOT EXISTS idx_ai_interactions_session ON ai_interactions(session_id);
+
+-- Unique constraint: one registration per email per webinar (prevents duplicate attendees)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_reg_email_webinar
+  ON webinar_registrations(webinar_id, email)
+  WHERE email IS NOT NULL;
 
 -- ==============================================================================
 -- 16. ENABLE ROW LEVEL SECURITY (RLS) & ACCESS POLICIES

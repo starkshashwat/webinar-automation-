@@ -167,19 +167,17 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
 
-    // 5. Process AI immediately if attendee message
+    // 5. Process AI in the background if attendee message
     if (finalMessageType === 'ATTENDEE') {
-      try {
-        await processChatMessage({
-          sessionId: validSessionId,
-          attendeeId: finalAttendeeId,
-          messageId: chatMessage.id,
-          message: message.trim(),
-          senderName: sender_name.trim(),
-        });
-      } catch (err) {
-        console.error('[Chat API] AI processing failed:', err);
-      }
+      processChatMessage({
+        sessionId: validSessionId,
+        attendeeId: finalAttendeeId,
+        messageId: chatMessage.id,
+        message: message.trim(),
+        senderName: sender_name.trim(),
+      }).catch((err) => {
+        console.error('[Chat API] Background AI processing failed:', err);
+      });
     }
 
     return NextResponse.json({ success: true, message: chatMessage });

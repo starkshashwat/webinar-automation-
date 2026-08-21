@@ -9,8 +9,18 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { webinar_id, name, email, phone } = body;
 
-    if (!webinar_id || !name) {
+    if (!webinar_id || !name || !email || !phone) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email.trim())) {
+      return NextResponse.json({ error: 'Invalid email address format' }, { status: 400 });
+    }
+
+    const phoneRegex = /^\+?[0-9\-\s()]{10,15}$/;
+    if (!phoneRegex.test(phone.trim())) {
+      return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 });
     }
 
     // Find or create a session for this webinar
@@ -35,43 +45,64 @@ export async function POST(request: Request) {
       }
     }
 
-    // Try inserting into webinar_registrations
+    // Try to find existing registration by email for this webinar (dedup)
     let attendee: any = null;
-    const { data: regData, error: regError } = await adminSupabase
-      .from('webinar_registrations')
-      .insert([{ 
-        webinar_id: webinar_id,
-        name: name.trim(),
-        email: email ? email.trim() : null,
-        phone: phone ? phone.trim() : null
-      }])
-      .select()
-      .single();
+    const trimmedEmail = email ? email.trim().toLowerCase() : null;
+    const trimmedPhone = phone ? phone.trim() : null;
 
-    if (regError) {
-      console.warn('[Register] Failed webinar_registrations, trying legacy attendees table:', regError.message);
-      // Fallback to attendees table if webinar_registrations doesn't exist
-      if (session?.id) {
-        const { data: legacyData, error: legacyError } = await adminSupabase
-          .from('attendees')
-          .insert([{
-            session_id: session.id,
-            display_name: name.trim(),
-            email: email ? email.trim() : null,
-            phone: phone ? phone.trim() : null
-          }])
-          .select()
-          .single();
+    if (trimmedEmail) {
+      const { data: existing } = await adminSupabase
+        .from('webinar_registrations')
+        .select('*')
+        .eq('webinar_id', webinar_id)
+        .eq('email', trimmedEmail)
+        .limit(1)
+        .maybeSingle();
 
-        if (legacyError) {
-          throw legacyError;
-        }
-        attendee = legacyData;
-      } else {
-        throw regError;
+      if (existing) {
+        // Found existing registration — reuse it (update phone/name if changed)
+        attendee = existing;
       }
-    } else {
-      attendee = regData;
+    }
+
+    // If no existing registration found, create a new one
+    if (!attendee) {
+      const { data: regData, error: regError } = await adminSupabase
+        .from('webinar_registrations')
+        .insert([{ 
+          webinar_id: webinar_id,
+          name: name.trim(),
+          email: trimmedEmail,
+          phone: trimmedPhone
+        }])
+        .select()
+        .single();
+
+      if (regError) {
+        console.warn('[Register] Failed webinar_registrations, trying legacy attendees table:', regError.message);
+        // Fallback to attendees table if webinar_registrations doesn't exist
+        if (session?.id) {
+          const { data: legacyData, error: legacyError } = await adminSupabase
+            .from('attendees')
+            .insert([{
+              session_id: session.id,
+              display_name: name.trim(),
+              email: trimmedEmail,
+              phone: trimmedPhone
+            }])
+            .select()
+            .single();
+
+          if (legacyError) {
+            throw legacyError;
+          }
+          attendee = legacyData;
+        } else {
+          throw regError;
+        }
+      } else {
+        attendee = regData;
+      }
     }
 
     const attendeeId = attendee.id;

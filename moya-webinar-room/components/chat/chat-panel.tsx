@@ -9,12 +9,14 @@ import { ArrowDown, MessageSquare, Reply, Lock } from 'lucide-react';
 
 export function ChatPanel({ 
   sessionId, 
+  webinarId,
   status,
   isOverlay = false,
   isAdmin = false,
   onReply
 }: { 
   sessionId: string; 
+  webinarId?: string;
   status: 'WAITING' | 'LIVE' | 'ENDED';
   isOverlay?: boolean;
   isAdmin?: boolean;
@@ -22,6 +24,7 @@ export function ChatPanel({
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
   const supabase = createClient();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -29,20 +32,47 @@ export function ChatPanel({
   const [attendeeName, setAttendeeName] = useState('Anonymous');
   const [attendeeId, setAttendeeId] = useState<string | null>(null);
 
+  const dismissNew = (id: string) => {
+    setNewMsgIds((prev) => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  };
+
+  const dismissAllNew = () => {
+    setNewMsgIds(new Set());
+  };
+
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedName = sessionStorage.getItem('moya_attendee_name');
-      const storedId = sessionStorage.getItem('moya_attendee_id');
+      let storedName = webinarId ? localStorage.getItem(`moya_attendee_name_${webinarId}`) : null;
+      let storedId = webinarId ? localStorage.getItem(`moya_attendee_${webinarId}`) : null;
+
+      // Fallback: search any registered attendee in localStorage
+      if (!storedName || !storedId) {
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.startsWith('moya_attendee_name_') && !storedName) {
+            storedName = localStorage.getItem(key);
+          }
+          if (key && key.startsWith('moya_attendee_') && !key.startsWith('moya_attendee_name_') && !storedId) {
+            storedId = localStorage.getItem(key);
+          }
+        }
+      }
+
       if (storedName) setAttendeeName(storedName);
       if (storedId) setAttendeeId(storedId);
     }
-  }, []);
+  }, [webinarId]);
 
   const scrollToBottom = (force = false) => {
     if (!scrollContainerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 120;
     
     if (force || isNearBottom) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -57,7 +87,7 @@ export function ChatPanel({
   }, []);
 
   useEffect(() => {
-    scrollToBottom(false);
+    scrollToBottom(true);
   }, [messages]);
 
   const handleScroll = () => {
@@ -65,6 +95,7 @@ export function ChatPanel({
     const { scrollTop, scrollHeight, clientHeight } = scrollContainerRef.current;
     if (scrollHeight - scrollTop - clientHeight < 20) {
       setHasNewMessages(false);
+      dismissAllNew();
     }
   };
 
@@ -96,14 +127,24 @@ export function ChatPanel({
         },
         (payload) => {
           const newMessage = payload.new as ChatMessage;
+          setNewMsgIds((prev) => new Set(prev).add(newMessage.id));
           setMessages((prev) => [...prev, newMessage]);
+
+          // Auto-clear badge after 6 seconds
+          setTimeout(() => {
+            setNewMsgIds((prev) => {
+              const next = new Set(prev);
+              next.delete(newMessage.id);
+              return next;
+            });
+          }, 6000);
         }
       )
       .subscribe();
 
     // Subscribe to private messages if we have a private channel ID
     let privateChannel: ReturnType<typeof supabase.channel> | null = null;
-    const privateChannelId = sessionStorage.getItem('moya_private_channel_id');
+    const privateChannelId = webinarId ? localStorage.getItem(`moya_private_channel_${webinarId}`) : null;
     if (privateChannelId) {
       privateChannel = supabase
         .channel(`private-chat-${privateChannelId}`)
@@ -112,7 +153,17 @@ export function ChatPanel({
           { event: 'message' },
           (payload) => {
             if (payload.payload) {
-              setMessages((prev) => [...prev, payload.payload as ChatMessage]);
+              const pMsg = payload.payload as ChatMessage;
+              setNewMsgIds((prev) => new Set(prev).add(pMsg.id));
+              setMessages((prev) => [...prev, pMsg]);
+
+              setTimeout(() => {
+                setNewMsgIds((prev) => {
+                  const next = new Set(prev);
+                  next.delete(pMsg.id);
+                  return next;
+                });
+              }, 6000);
             }
           }
         )
@@ -123,7 +174,7 @@ export function ChatPanel({
       supabase.removeChannel(channel);
       if (privateChannel) supabase.removeChannel(privateChannel);
     };
-  }, [sessionId, supabase]);
+  }, [sessionId, supabase, webinarId]);
 
   const handleSend = async (text: string) => {
     const senderName = isAdmin ? 'HOST' : attendeeName;
@@ -154,7 +205,12 @@ export function ChatPanel({
     if (isAdmin) return true;
 
     // 2. Broadcasts (SYSTEM and CTA announcements) are visible to all attendees
-    if (['SYSTEM', 'CTA'].includes(msg.message_type)) return true;
+    if (['SYSTEM', 'CTA'].includes(msg.message_type)) {
+      if (msg.message_type === 'CTA' && msg.metadata?.type === 'BANNER') {
+        return false; // Do not show banner-only messages in the chat log
+      }
+      return true;
+    }
 
     // 3. Attendee messages: Attendees only see their OWN messages in their private room
     if (msg.message_type === 'ATTENDEE') {
@@ -216,7 +272,12 @@ export function ChatPanel({
 
             return (
               <div key={msg.id} className="message-enter relative group">
-                <ChatMessageItem message={msg} isAdmin={isAdmin} />
+                <ChatMessageItem 
+                  message={msg} 
+                  isAdmin={isAdmin} 
+                  isNew={isAdmin && newMsgIds.has(msg.id)}
+                  onDismissNew={() => dismissNew(msg.id)}
+                />
                 
                 {/* 1-Click Private Reply Button for Admin */}
                 {isAdmin && isAttendeeMsg && (
@@ -244,9 +305,9 @@ export function ChatPanel({
           <div className="sticky bottom-2 left-0 right-0 flex justify-center z-10">
             <button 
               onClick={() => scrollToBottom(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg flex items-center gap-1.5 transition-all"
+              className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-4 py-2 rounded-full shadow-[0_0_15px_rgba(37,99,235,0.5)] flex items-center gap-2 transition-all active:scale-95 animate-bounce"
             >
-              <ArrowDown className="w-3.5 h-3.5" />
+              <ArrowDown className="w-4 h-4" />
               New messages
             </button>
           </div>

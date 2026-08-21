@@ -25,8 +25,7 @@ export async function checkAndStartScheduledWebinars(): Promise<{
     console.error('[Webinar Scheduler] Error fetching pending webinars:', pendingError);
   } else if (pendingWebinars && pendingWebinars.length > 0) {
     for (const webinar of pendingWebinars) {
-      const durationMins = webinar.recording_duration || webinar.duration_minutes || 60;
-      const durationMs = durationMins * 60 * 1000;
+      const durationMs = ((webinar.recording_duration || webinar.duration_minutes || 60) * 60 * 1000) + ((webinar.duration_seconds || 0) * 1000);
       const startTime = new Date(webinar.scheduled_start).getTime();
 
       // If one-time and time has completely passed its full duration window, mark directly as ENDED
@@ -59,8 +58,7 @@ export async function checkAndStartScheduledWebinars(): Promise<{
     console.error('[Webinar Scheduler] Error fetching live webinars:', liveError);
   } else if (liveWebinars && liveWebinars.length > 0) {
     for (const webinar of liveWebinars) {
-      const durationMins = webinar.recording_duration || webinar.duration_minutes || 60;
-      const durationMs = durationMins * 60 * 1000;
+      const durationMs = ((webinar.recording_duration || webinar.duration_minutes || 60) * 60 * 1000) + ((webinar.duration_seconds || 0) * 1000);
       const startTime = webinar.started_at 
         ? new Date(webinar.started_at).getTime() 
         : webinar.actual_start_at

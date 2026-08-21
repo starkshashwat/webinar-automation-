@@ -15,18 +15,9 @@ export interface AIProvider {
   testConnection(settings: AISettings): Promise<{ success: boolean; message: string }>;
 }
 
-import { GoogleProvider } from './google';
 import { NvidiaProvider } from './nvidia';
 
 export function getAIProvider(settings: AISettings): AIProvider {
-  const providerType = (settings.provider || 'google').toLowerCase();
-  
-  switch (providerType) {
-    case 'nvidia':
-    case 'nvidia nim':
-      return new NvidiaProvider();
-    case 'google':
-    default:
-      return new GoogleProvider();
-  }
+  // Nvidia NIM / OpenAI-compatible provider
+  return new NvidiaProvider();
 }

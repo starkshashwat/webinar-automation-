@@ -3,15 +3,15 @@
 import { useEffect, useState, use } from 'react';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
-import { JoinForm } from './join-form';
+import { JoinForm } from '@/app/webinar/[slug]/join-form';
 import { type Webinar, type WebinarSession } from '@/types/webinar';
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+  params: Promise<{ token: string }>;
 }
 
-export default function WebinarPage({ params }: PageProps) {
-  const { slug } = use(params);
+export default function MaskedWebinarPage({ params }: PageProps) {
+  const { token } = use(params);
   const [loading, setLoading] = useState(true);
   const [notFoundState, setNotFoundState] = useState(false);
   const [webinar, setWebinar] = useState<Webinar | null>(null);
@@ -20,16 +20,26 @@ export default function WebinarPage({ params }: PageProps) {
 
   useEffect(() => {
     async function loadWebinar() {
-      const decodedSlug = decodeURIComponent(slug);
+      const decodedToken = decodeURIComponent(token).trim();
       const supabase = createClient();
 
-      const { data: w, error } = await supabase
+      // 1. Try finding by short_token first, fallback to slug
+      let { data: w } = await supabase
         .from('webinars')
         .select('*')
-        .eq('slug', decodedSlug)
-        .single();
+        .eq('short_token', decodedToken)
+        .maybeSingle();
 
-      if (error || !w) {
+      if (!w) {
+        const { data: fallbackWebinar } = await supabase
+          .from('webinars')
+          .select('*')
+          .eq('slug', decodedToken)
+          .maybeSingle();
+        w = fallbackWebinar;
+      }
+
+      if (!w) {
         setNotFoundState(true);
         setLoading(false);
         return;
@@ -61,7 +71,7 @@ export default function WebinarPage({ params }: PageProps) {
           .eq('webinar_id', w.id)
           .order('started_at', { ascending: false })
           .limit(1)
-          .single();
+          .maybeSingle();
         
         if (activeSession) {
           setSession(activeSession);
@@ -72,7 +82,7 @@ export default function WebinarPage({ params }: PageProps) {
     }
 
     loadWebinar();
-  }, [slug]);
+  }, [token]);
 
   if (notFoundState) {
     notFound();
@@ -80,8 +90,11 @@ export default function WebinarPage({ params }: PageProps) {
 
   if (loading || !webinar) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center text-zinc-500">
-        Loading webinar room...
+      <div className="min-h-screen bg-[#0E0F12] flex items-center justify-center text-zinc-500 font-medium text-sm">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-6 h-6 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin" />
+          <span>Entering secure webinar room...</span>
+        </div>
       </div>
     );
   }

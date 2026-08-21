@@ -46,6 +46,9 @@ export async function PUT(request: Request) {
       api_key, 
       model, 
       system_instructions, 
+      ignore_rules,
+      pre_pitch_prompt,
+      post_pitch_prompt,
       is_enabled_globally 
     } = body;
 
@@ -54,10 +57,13 @@ export async function PUT(request: Request) {
 
     const updatePayload: any = {
       ai_name: ai_name || existing.ai_name,
-      provider: provider || existing.provider || 'google',
-      api_base_url: api_base_url !== undefined ? api_base_url : existing.api_base_url,
-      model: model || existing.model || 'gemini-2.5-flash',
+      provider: provider || (existing.provider === 'google' ? 'nvidia' : (existing.provider || 'nvidia')),
+      api_base_url: api_base_url !== undefined ? api_base_url : (existing.api_base_url || 'https://integrate.api.nvidia.com/v1'),
+      model: model || ((existing.model && !existing.model.includes('gemini')) ? existing.model : 'meta/llama-3.1-8b-instruct'),
       system_instructions: system_instructions || existing.system_instructions,
+      ignore_rules: ignore_rules !== undefined ? ignore_rules : existing.ignore_rules,
+      pre_pitch_prompt: pre_pitch_prompt !== undefined ? pre_pitch_prompt : existing.pre_pitch_prompt,
+      post_pitch_prompt: post_pitch_prompt !== undefined ? post_pitch_prompt : existing.post_pitch_prompt,
       is_enabled_globally: is_enabled_globally !== undefined ? is_enabled_globally : existing.is_enabled_globally,
       updated_at: new Date().toISOString(),
     };

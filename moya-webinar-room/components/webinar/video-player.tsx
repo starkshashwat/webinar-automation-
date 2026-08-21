@@ -6,17 +6,21 @@ import { ChatOverlay } from '@/components/chat/chat-overlay';
 export function VideoPlayer({ 
   url, 
   sessionId, 
+  webinarId,
   status,
   isMuted = false,
   isFullscreen = false,
+  hideOverlay = false,
   startedAt
 }: { 
   url: string | null; 
   sessionId?: string; 
+  webinarId?: string;
   status?: 'WAITING' | 'LIVE' | 'ENDED';
   isMuted?: boolean;
   isFullscreen?: boolean;
-  startedAt?: string;
+  hideOverlay?: boolean;
+  startedAt?: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [initialStartSeconds, setInitialStartSeconds] = useState(0);
@@ -27,6 +31,23 @@ export function VideoPlayer({
       videoRef.current.muted = isMuted;
     }
   }, [isMuted]);
+
+  // PiP Listener
+  useEffect(() => {
+    const handlePiP = async () => {
+      if (videoRef.current && document.pictureInPictureEnabled) {
+        try {
+          if (document.pictureInPictureElement !== videoRef.current) {
+            await videoRef.current.requestPictureInPicture();
+          }
+        } catch (err) {
+          console.error('PiP failed', err);
+        }
+      }
+    };
+    window.addEventListener('requestPiP', handlePiP);
+    return () => window.removeEventListener('requestPiP', handlePiP);
+  }, []);
 
   // Global Time Sync Effect
   useEffect(() => {
@@ -125,9 +146,9 @@ export function VideoPlayer({
       <div className="absolute inset-0 z-10 bg-transparent" />
 
       {/* Chat Overlay for Fullscreen or Mobile */}
-      {sessionId && status === 'LIVE' && (
-        <div className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 pointer-events-auto ${isFullscreen ? 'h-[35%]' : 'h-[35%] lg:hidden'}`}>
-          <ChatOverlay sessionId={sessionId} status={status} />
+      {sessionId && status === 'LIVE' && !hideOverlay && (
+        <div className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 pointer-events-auto ${isFullscreen ? 'h-[40%]' : 'h-[35%] lg:hidden'}`}>
+          <ChatOverlay sessionId={sessionId} webinarId={webinarId} status={status} />
         </div>
       )}
     </div>

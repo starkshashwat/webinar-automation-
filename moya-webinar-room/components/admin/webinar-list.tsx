@@ -5,23 +5,27 @@ import { createClient } from '@/lib/supabase/client';
 import { Settings, Eye, Bot, Copy, Check, BarChart3 } from 'lucide-react';
 import Link from 'next/link';
 
-function CopyLinkButton({ slug }: { slug: string }) {
+function CopyLinkButton({ token, slug, primaryDomain }: { token?: string | null; slug: string; primaryDomain?: string | null }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    const url = `${window.location.origin}/webinar/${slug}`;
+    const path = token ? `/w/${token}` : `/webinar/${slug}`;
+    const baseUrl = primaryDomain ? `https://${primaryDomain}` : window.location.origin;
+    const url = `${baseUrl}${path}`;
     navigator.clipboard.writeText(url);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const path = token ? `/w/${token}` : `/webinar/${slug}`;
+
   return (
     <div className="flex items-center gap-1 bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
       <Link
-        href={`/webinar/${slug}`}
+        href={path}
         target="_blank"
         className="px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-medium"
-        title="Open Attendee Room"
+        title="Open Masked Attendee Room"
       >
         <Eye className="w-3.5 h-3.5" />
         Room
@@ -30,9 +34,9 @@ function CopyLinkButton({ slug }: { slug: string }) {
       <button
         onClick={handleCopy}
         className="px-2.5 py-1.5 text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors flex items-center gap-1.5 text-xs font-medium"
-        title="Copy Link"
+        title="Copy Masked Join Link"
       >
-        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+        {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-purple-400" />}
         Copy Link
       </button>
     </div>
@@ -41,7 +45,19 @@ function CopyLinkButton({ slug }: { slug: string }) {
 
 export function WebinarList({ initialWebinars }: { initialWebinars: any[] }) {
   const [webinars, setWebinars] = useState(initialWebinars);
+  const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
   const supabase = createClient();
+
+  useEffect(() => {
+    fetch('/api/settings/domain')
+      .then(res => res.json())
+      .then(data => {
+        if (data.primaryDomain) {
+          setPrimaryDomain(data.primaryDomain.domain);
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Periodic scheduler ping to automatically detect time-expired webinars
   useEffect(() => {
@@ -124,7 +140,7 @@ export function WebinarList({ initialWebinars }: { initialWebinars: any[] }) {
                 <tr key={w.id} className="hover:bg-white/[0.02] transition-colors">
                   <td className="p-4">
                     <div className="font-semibold text-white">{w.title}</div>
-                    <div className="text-xs text-zinc-500 font-mono mt-0.5">/webinar/{w.slug}</div>
+                    <div className="text-xs text-zinc-500 font-mono mt-0.5">/w/{w.short_token || w.slug}</div>
                   </td>
                   <td className="p-4 text-zinc-300">
                     {w.schedule_type === 'daily' ? (
@@ -175,7 +191,7 @@ export function WebinarList({ initialWebinars }: { initialWebinars: any[] }) {
                       </Link>
                     ) : (
                       <>
-                        <CopyLinkButton slug={w.slug} />
+                        <CopyLinkButton token={w.short_token} slug={w.slug} primaryDomain={primaryDomain} />
                         <Link
                           href={`/admin/webinars/${w.id}/edit`}
                           className="inline-flex items-center gap-1 text-xs text-zinc-400 hover:text-white px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 transition-colors"

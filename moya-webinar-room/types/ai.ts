@@ -23,6 +23,9 @@ export interface AISettings {
   api_key?: string | null;
   model: string;
   system_instructions: string;
+  ignore_rules?: string | null;
+  pre_pitch_prompt?: string | null;
+  post_pitch_prompt?: string | null;
   is_enabled_globally: boolean;
   created_at?: string;
   updated_at?: string;

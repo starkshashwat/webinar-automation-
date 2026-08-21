@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,11 +14,34 @@ export function RegistrationForm({
   onRegistered: (attendee: any) => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [branding, setBranding] = useState<{ logo_url?: string | null; brand_name?: string | null }>({});
   const [formData, setFormData] = useState({
     name: '',
     email: '',
     phone: '',
   });
+
+  useEffect(() => {
+    fetch('/api/settings/domain')
+      .then(res => res.json())
+      .then(data => {
+        const logo = data.primaryDomain?.logo_url || data.platformSettings?.logo_url;
+        const favicon = data.primaryDomain?.favicon_url || data.platformSettings?.favicon_url;
+        const name = data.platformSettings?.brand_name || 'MOYA Live';
+        setBranding({ logo_url: logo, brand_name: name });
+
+        if (favicon) {
+          let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'shortcut icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = favicon;
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,11 +59,11 @@ export function RegistrationForm({
 
       if (res.ok) {
         const { attendee } = await res.json();
-        // Save to session storage
-        sessionStorage.setItem('moya_attendee_id', attendee.id);
-        sessionStorage.setItem('moya_attendee_name', attendee.display_name);
+        // Save to localStorage (persists across tabs/closes, keyed per webinar)
+        localStorage.setItem(`moya_attendee_${webinarId}`, attendee.id);
+        localStorage.setItem(`moya_attendee_name_${webinarId}`, attendee.display_name);
         if (attendee.private_channel_id) {
-          sessionStorage.setItem('moya_private_channel_id', attendee.private_channel_id);
+          localStorage.setItem(`moya_private_channel_${webinarId}`, attendee.private_channel_id);
         }
         onRegistered(attendee);
       } else {
@@ -57,7 +80,17 @@ export function RegistrationForm({
   return (
     <div className="flex items-center justify-center min-h-screen bg-[#090A0C] p-4">
       <Card className="w-full max-w-md bg-[#121419] border-zinc-800 text-white shadow-2xl">
-        <CardHeader className="text-center space-y-2">
+        <CardHeader className="text-center space-y-3 pb-2">
+          {branding.logo_url && (
+            <div className="flex justify-center mb-1">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img 
+                src={branding.logo_url} 
+                alt={branding.brand_name || 'Logo'} 
+                className="max-h-12 max-w-[180px] object-contain" 
+              />
+            </div>
+          )}
           <CardTitle className="text-2xl font-bold tracking-tight">Join Webinar</CardTitle>
           <CardDescription className="text-zinc-400">Please enter your details to access the live room.</CardDescription>
         </CardHeader>
@@ -80,6 +113,8 @@ export function RegistrationForm({
                 id="email"
                 type="email"
                 required
+                pattern="^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$"
+                title="Please enter a valid email address."
                 value={formData.email}
                 onChange={(e) => setFormData({...formData, email: e.target.value})}
                 placeholder="john@example.com"
@@ -87,13 +122,16 @@ export function RegistrationForm({
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number (Optional)</Label>
+              <Label htmlFor="phone">Phone Number</Label>
               <Input 
                 id="phone"
                 type="tel"
+                required
+                pattern="^\\+?[0-9\\-\\s()]{10,15}$"
+                title="Please enter a valid phone number (10-15 digits)."
                 value={formData.phone}
                 onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                placeholder="+1 (555) 000-0000"
+                placeholder="+91 9876543210"
                 className="bg-black/50 border-zinc-800"
               />
             </div>

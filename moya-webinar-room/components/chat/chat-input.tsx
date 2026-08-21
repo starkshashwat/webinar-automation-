@@ -45,9 +45,9 @@ export function ChatInput({
       <button 
         type="submit" 
         disabled={!message.trim() || status !== 'LIVE' || isSending}
-        className={`flex items-center justify-center w-9 h-9 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+        className={`flex items-center justify-center w-9 h-9 rounded-full transition-all active:scale-95 disabled:active:scale-100 disabled:opacity-50 disabled:cursor-not-allowed ${
           isOverlay
-            ? 'bg-blue-600 hover:bg-blue-500 text-white'
+            ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-lg'
             : 'bg-zinc-800 hover:bg-zinc-700 text-blue-400'
         }`}
       >

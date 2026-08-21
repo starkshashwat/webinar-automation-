@@ -1,28 +1,44 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import { createAdminClient } from '@/lib/supabase/server';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
-  const supabase = await createClient();
-  try {
-    const { registration_id, event_type, value } = await request.json();
+  const supabase = createAdminClient();
+  const cookieStore = await cookies();
 
-    if (!registration_id || !event_type) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+  try {
+    const body = await request.json().catch(() => ({}));
+    let registrationId = body.registration_id;
+
+    if (!registrationId) {
+      registrationId = cookieStore.get('moya_attendee_session')?.value;
     }
+
+    if (!registrationId) {
+      return NextResponse.json({ error: 'Missing registration id' }, { status: 400 });
+    }
+
+    const eventType = body.event_type || 'CTA_CLICK';
+    const value = body.value || 0;
 
     const { error } = await supabase
       .from('webinar_conversions')
       .insert([{
-        registration_id,
-        event_type, // 'CTA_CLICK', 'CHECKOUT_STARTED', 'PURCHASED'
-        value: value || 0
+        registration_id: registrationId,
+        event_type: eventType,
+        value: value
       }]);
 
-    if (error) throw error;
+    if (error) {
+      console.warn('[Conversion Track Error]:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
 
     return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error(err);
+  } catch (err: any) {
+    console.error('[Conversion API Error]:', err);
     return NextResponse.json({ error: 'Failed to record conversion' }, { status: 500 });
   }
 }

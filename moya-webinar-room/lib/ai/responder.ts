@@ -24,9 +24,9 @@ export async function getAISettings(): Promise<AISettings> {
   return {
     id: '00000000-0000-0000-0000-000000000001',
     ai_name: 'MOYA Webinar Assistant',
-    provider: 'google',
-    api_key: process.env.AI_API_KEY || null,
-    model: process.env.AI_MODEL || 'gemini-flash-latest',
+    provider: 'nvidia',
+    api_key: process.env.NVIDIA_API_KEY || process.env.AI_API_KEY || null,
+    model: process.env.AI_MODEL || 'meta/llama-3.1-8b-instruct',
     system_instructions: 'You are the official webinar assistant. Answer attendee questions clearly and concisely using only the provided webinar knowledge. Never invent information or URLs.',
     is_enabled_globally: true,
   };
@@ -139,12 +139,30 @@ export async function generateAIResponse({
     }
   }
 
-  const pitchRestriction = courseSalesLocked ? `
+  const pitchRestriction = courseSalesLocked 
+    ? (settings.pre_pitch_prompt 
+        ? `\n> [!CRITICAL] PRE-PITCH RULES:\n> ${settings.pre_pitch_prompt}\n` 
+        : `
 > [!CRITICAL]
 > THE COURSE SALES INFORMATION IS CURRENTLY LOCKED. The pitch time has NOT been reached yet.
 > DO NOT reveal course pricing, URLs, specific modules, bonuses, or enrollment details under any circumstances.
 > If the attendee asks about the course, gracefully deflect them: "The detailed course information will be shared at the appropriate point in the webinar. Please stay with us for the full session." Do not provide any resources.
-` : '';
+`) 
+    : (settings.post_pitch_prompt
+        ? `\n> [!CRITICAL] POST-PITCH RULES:\n> ${settings.post_pitch_prompt}\n`
+        : '');
+
+  const ignoreRules = settings.ignore_rules
+    ? `\n# MESSAGE IGNORING RULES:\n${settings.ignore_rules}\nIf the message matches these ignore rules, set "response_mode" to "no_response" and "intent" to "ENGAGEMENT".\n`
+    : '';
+
+  let exactCourseUrl = webinar.course_url?.trim();
+  if (!exactCourseUrl && webinar.ai_cta_broadcast_prompt) {
+    const urlMatch = (webinar.ai_cta_broadcast_prompt as string).match(/(https?:\/\/[^\s]+)/i);
+    if (urlMatch) {
+      exactCourseUrl = urlMatch[0].replace(/[),.;]+$/, '');
+    }
+  }
 
   const systemInstruction = `
 ${settings.system_instructions}
@@ -152,9 +170,10 @@ ${settings.system_instructions}
 # WEBINAR CONTEXT:
 - Title: "${webinar.title}"
 - Description: "${webinar.description || 'Live Masterclass'}"
-- Course/Main URL: "${webinar.course_url || ''}"
+- Course/Main URL: "${exactCourseUrl || ''}"
 ${hostContext}
 ${pitchRestriction}
+${ignoreRules}
 
 # APPROVED KNOWLEDGE BASE:
 ${courseSalesLocked ? '(Course knowledge is currently locked. Answer only general webinar questions.)' : kbFormatted}

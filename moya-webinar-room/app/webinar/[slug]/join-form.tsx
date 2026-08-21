@@ -26,19 +26,43 @@ export function JoinForm({
   });
   const [currentSession, setCurrentSession] = useState<WebinarSession | null>(initialSession);
   const [countdownText, setCountdownText] = useState<string>('');
+  const [branding, setBranding] = useState<{ logo_url?: string | null; favicon_url?: string | null; brand_name?: string | null }>({});
 
   const supabase = createClient();
   const hasTriggeredCronRef = useRef(false);
 
-  // Check if they are already registered in this browser session
+  // Sync Branding & Favicon
   useEffect(() => {
-    const id = sessionStorage.getItem('moya_attendee_id');
-    const name = sessionStorage.getItem('moya_attendee_name');
+    fetch('/api/settings/domain')
+      .then(res => res.json())
+      .then(data => {
+        const logo = data.primaryDomain?.logo_url || data.platformSettings?.logo_url;
+        const favicon = data.primaryDomain?.favicon_url || data.platformSettings?.favicon_url;
+        const name = data.platformSettings?.brand_name || 'MOYA Live';
+        setBranding({ logo_url: logo, favicon_url: favicon, brand_name: name });
+
+        if (favicon) {
+          let link: HTMLLinkElement | null = document.querySelector("link[rel*='icon']");
+          if (!link) {
+            link = document.createElement('link');
+            link.rel = 'shortcut icon';
+            document.getElementsByTagName('head')[0].appendChild(link);
+          }
+          link.href = favicon;
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  // Check if they are already registered in this browser
+  useEffect(() => {
+    const id = localStorage.getItem(`moya_attendee_${webinar.id}`);
+    const name = localStorage.getItem(`moya_attendee_name_${webinar.id}`);
     if (id && name) {
       setHasJoined(true);
       setAttendee({ id, display_name: name });
     }
-  }, []);
+  }, [webinar.id]);
 
   // Helper to calculate target start timestamp
   const getStartTime = () => {
@@ -60,7 +84,7 @@ export function JoinForm({
       const startTime = getStartTime();
       if (!startTime) return;
 
-      const durationMs = (webinar.recording_duration || webinar.duration_minutes || 60) * 60 * 1000;
+      const durationMs = ((webinar.recording_duration || webinar.duration_minutes || 60) * 60 * 1000) + ((webinar.duration_seconds || 0) * 1000);
       const endTime = startTime + durationMs;
       const now = Date.now();
 
@@ -181,9 +205,17 @@ export function JoinForm({
     return (
       <div className="flex min-h-screen items-center justify-center p-4 bg-[#090A0C] text-zinc-100">
         <div className="w-full max-w-lg bg-[#121419] border border-zinc-800 p-8 sm:p-10 rounded-3xl shadow-2xl text-center space-y-6 animate-in fade-in zoom-in-95 duration-500">
-          <div className="flex justify-center">
-            <div className="w-16 h-16 bg-blue-600/15 border border-blue-500/30 rounded-2xl flex items-center justify-center animate-pulse shadow-lg shadow-blue-600/20">
-              <Clock className="w-8 h-8 text-blue-400" />
+          <div className="flex flex-col items-center justify-center gap-3">
+            {branding.logo_url ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img 
+                src={branding.logo_url} 
+                alt={branding.brand_name || 'Logo'} 
+                className="max-h-12 max-w-[180px] object-contain mb-1" 
+              />
+            ) : null}
+            <div className="w-14 h-14 bg-blue-600/15 border border-blue-500/30 rounded-2xl flex items-center justify-center animate-pulse shadow-lg shadow-blue-600/20">
+              <Clock className="w-7 h-7 text-blue-400" />
             </div>
           </div>
 

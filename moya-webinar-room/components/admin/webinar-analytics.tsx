@@ -2,11 +2,13 @@
 
 import { useEffect, useState } from 'react';
 import { createClient } from '@/lib/supabase/client';
-import { Users, Clock, MousePointerClick, Download, BarChart3, ArrowLeft } from 'lucide-react';
+import { Users, Clock, MousePointerClick, Download, BarChart3, ArrowLeft, History } from 'lucide-react';
 import Link from 'next/link';
+import { AttendeeJourneyModal } from './attendee-journey-modal';
 
 export function WebinarAnalytics({ webinar, session }: { webinar: any; session: any }) {
   const [loading, setLoading] = useState(true);
+  const [selectedAttendee, setSelectedAttendee] = useState<{ email?: string; phone?: string; name?: string } | null>(null);
   const [metrics, setMetrics] = useState({
     totalRegistrations: 0,
     totalAttendees: 0,
@@ -224,15 +226,28 @@ export function WebinarAnalytics({ webinar, session }: { webinar: any; session: 
                         <span className="text-zinc-600">-</span>
                       )}
                     </td>
-                    <td className="p-4 text-right">
+                    <td className="p-4 text-right flex items-center justify-end gap-2">
                       {attendee.clicks > 0 ? (
                         <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20">
                           <MousePointerClick className="w-3.5 h-3.5" />
                           {attendee.clicks} Click{attendee.clicks > 1 ? 's' : ''}
                         </span>
                       ) : (
-                        <span className="text-zinc-600">-</span>
+                        <span className="text-zinc-600 mr-2">-</span>
                       )}
+
+                      <button
+                        onClick={() => setSelectedAttendee({
+                          email: attendee.email,
+                          phone: attendee.phone,
+                          name: attendee.name
+                        })}
+                        className="p-1.5 bg-zinc-800/80 hover:bg-purple-900/30 text-zinc-400 hover:text-purple-300 border border-zinc-700/60 hover:border-purple-500/40 rounded-lg text-xs font-medium flex items-center gap-1 transition-all shadow-sm"
+                        title="View Cross-Webinar Attendance Timeline"
+                      >
+                        <History className="w-3.5 h-3.5" />
+                        <span className="hidden sm:inline">Timeline</span>
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -247,6 +262,16 @@ export function WebinarAnalytics({ webinar, session }: { webinar: any; session: 
             </table>
           </div>
         </div>
+
+        {/* Cross-Webinar Attendee Journey Modal */}
+        {selectedAttendee && (
+          <AttendeeJourneyModal
+            email={selectedAttendee.email}
+            phone={selectedAttendee.phone}
+            initialName={selectedAttendee.name}
+            onClose={() => setSelectedAttendee(null)}
+          />
+        )}
 
       </div>
     </main>

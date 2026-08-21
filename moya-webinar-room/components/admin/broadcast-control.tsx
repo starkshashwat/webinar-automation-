@@ -39,9 +39,11 @@ export function BroadcastControl({
   const isLive = session?.status === 'LIVE' || session?.status === 'live';
   const isPitchEnabled = webinar.course_pitch_enabled;
   const pitchDelayMins = webinar.course_pitch_delay_minutes || 0;
+  const pitchDelaySecs = webinar.course_pitch_delay_seconds || 0;
   const batchSize = webinar.ai_cta_broadcast_batch_size || 1;
   const intervalMins = webinar.ai_cta_broadcast_interval_minutes || 5;
   const maxCount = webinar.ai_cta_broadcast_max_count || 3;
+  const endCondition = webinar.ai_cta_broadcast_end_condition || 'MAX_COUNT';
 
   // Resolve target course URL
   let resolvedUrl = webinar.course_url?.trim() || '';
@@ -106,7 +108,7 @@ export function BroadcastControl({
       }
 
       const startedAt = new Date(session.started_at).getTime();
-      const unlockTime = startedAt + pitchDelayMins * 60000;
+      const unlockTime = startedAt + (pitchDelayMins * 60000) + (pitchDelaySecs * 1000);
       const now = Date.now();
 
       if (now < unlockTime) {
@@ -118,7 +120,7 @@ export function BroadcastControl({
       } else {
         setTimeRemaining('Unlocked & Active');
         
-        if (ctaCount >= maxCount) {
+        if (endCondition === 'MAX_COUNT' && ctaCount >= maxCount) {
           setNextBroadcastTime('Max limit reached');
         } else if (lastCtaTime) {
           const nextRun = lastCtaTime.getTime() + intervalMins * 60000;
@@ -139,7 +141,7 @@ export function BroadcastControl({
     updateTimers();
     const interval = setInterval(updateTimers, 1000);
     return () => clearInterval(interval);
-  }, [isLive, session?.started_at, pitchDelayMins, lastCtaTime, ctaCount, maxCount, intervalMins]);
+  }, [isLive, session?.started_at, pitchDelayMins, pitchDelaySecs, lastCtaTime, ctaCount, maxCount, intervalMins, endCondition]);
 
   const handleManualBroadcast = async () => {
     setBroadcasting(true);
@@ -204,14 +206,14 @@ export function BroadcastControl({
                 <Clock className="w-3 h-3 animate-pulse" />
                 {timeRemaining}
               </span>
-            ) : ctaCount >= maxCount ? (
+            ) : endCondition === 'MAX_COUNT' && ctaCount >= maxCount ? (
               <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-blue-500/20 text-blue-300 border border-blue-500/30">
                 Completed ({ctaCount}/{maxCount})
               </span>
             ) : (
               <span className="px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
                 <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
-                Pitch Active
+                Pitch Active {endCondition === 'WEBINAR_END' ? '(Continuous)' : ''}
               </span>
             )}
           </div>
@@ -222,7 +224,10 @@ export function BroadcastControl({
           <div className="bg-black/40 p-2.5 rounded-xl border border-zinc-800/80">
             <span className="text-[10px] text-zinc-500 font-medium uppercase block">Total Sent</span>
             <span className="text-base font-bold text-white font-mono">
-              {ctaCount} <span className="text-xs font-normal text-zinc-500">/ {maxCount}</span>
+              {ctaCount}{' '}
+              <span className="text-xs font-normal text-zinc-400">
+                {endCondition === 'WEBINAR_END' ? '(Until webinar ends)' : `/ ${maxCount}`}
+              </span>
             </span>
           </div>
 

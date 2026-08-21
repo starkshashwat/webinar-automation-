@@ -9,5 +9,6 @@ export interface ChatMessage {
   sender_name: string;
   message: string;
   message_type: MessageType;
+  metadata?: any;
   created_at: string;
 }

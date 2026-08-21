@@ -5,7 +5,7 @@ import { applyGuardrails } from '../guardrails';
 export class NvidiaProvider implements AIProvider {
   async testConnection(settings: AISettings): Promise<{ success: boolean; message: string }> {
     try {
-      const apiKey = settings.api_key || process.env.AI_API_KEY;
+      const apiKey = settings.api_key || process.env.NVIDIA_API_KEY || process.env.AI_API_KEY;
       if (!apiKey) return { success: false, message: 'API key is missing.' };
 
       const baseUrl = settings.api_base_url || 'https://integrate.api.nvidia.com/v1';
@@ -42,7 +42,7 @@ export class NvidiaProvider implements AIProvider {
 
   async generateResponse(options: GenerateResponseOptions): Promise<AIResponseResult> {
     const { settings, systemInstruction, userPrompt, isPrivateByPattern, resources } = options;
-    const apiKey = settings.api_key || process.env.AI_API_KEY;
+    const apiKey = settings.api_key || process.env.NVIDIA_API_KEY || process.env.AI_API_KEY;
     
     if (!apiKey) {
       return {

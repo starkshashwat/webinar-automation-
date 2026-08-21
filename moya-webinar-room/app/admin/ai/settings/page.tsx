@@ -18,11 +18,14 @@ export default function AISettingsPage() {
 
   const [formData, setFormData] = useState({
     ai_name: 'MOYA Webinar Assistant',
-    provider: 'google',
-    api_base_url: 'https://generativelanguage.googleapis.com',
+    provider: 'nvidia',
+    api_base_url: 'https://integrate.api.nvidia.com/v1',
     api_key: '',
-    model: 'gemini-flash-latest',
+    model: 'meta/llama-3.1-8b-instruct',
     system_instructions: '',
+    ignore_rules: '',
+    pre_pitch_prompt: '',
+    post_pitch_prompt: '',
     is_enabled_globally: true,
     masked_api_key: '',
   });
@@ -35,11 +38,14 @@ export default function AISettingsPage() {
           const s = data.settings;
             setFormData({
               ai_name: s.ai_name || 'MOYA Webinar Assistant',
-              provider: s.provider || 'google',
-              api_base_url: s.api_base_url || (s.provider === 'nvidia' ? 'https://integrate.api.nvidia.com/v1' : 'https://generativelanguage.googleapis.com'),
+              provider: s.provider === 'google' ? 'nvidia' : (s.provider || 'nvidia'),
+              api_base_url: s.api_base_url || 'https://integrate.api.nvidia.com/v1',
               api_key: '',
-              model: s.model || 'gemini-flash-latest',
+              model: (s.model && !s.model.includes('gemini')) ? s.model : 'meta/llama-3.1-8b-instruct',
               system_instructions: s.system_instructions || '',
+              ignore_rules: s.ignore_rules || '',
+              pre_pitch_prompt: s.pre_pitch_prompt || '',
+              post_pitch_prompt: s.post_pitch_prompt || '',
               is_enabled_globally: s.is_enabled_globally !== false,
               masked_api_key: s.masked_api_key || '',
             });
@@ -88,21 +94,12 @@ export default function AISettingsPage() {
 
   const handleProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newProvider = e.target.value;
-    if (newProvider === 'nvidia' || newProvider === 'nvidia nim') {
-      setFormData(prev => ({ 
-        ...prev, 
-        provider: newProvider, 
-        api_base_url: 'https://integrate.api.nvidia.com/v1',
-        model: ''
-      }));
-    } else {
-      setFormData(prev => ({ 
-        ...prev, 
-        provider: 'google', 
-        api_base_url: 'https://generativelanguage.googleapis.com',
-        model: 'gemini-flash-latest'
-      }));
-    }
+    setFormData(prev => ({ 
+      ...prev, 
+      provider: newProvider, 
+      api_base_url: prev.api_base_url || 'https://integrate.api.nvidia.com/v1',
+      model: prev.model || 'meta/llama-3.1-8b-instruct'
+    }));
   };
 
   const handleTestConnection = async () => {
@@ -234,8 +231,7 @@ export default function AISettingsPage() {
                     onChange={handleProviderChange}
                     className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm"
                   >
-                    <option value="google">Google Gemini</option>
-                    <option value="nvidia">NVIDIA NIM</option>
+                    <option value="nvidia">NVIDIA NIM / OpenAI-Compatible</option>
                   </select>
                 </div>
 
@@ -254,16 +250,14 @@ export default function AISettingsPage() {
                 <div className="space-y-2">
                   <label className="block text-sm font-medium text-zinc-200 flex items-center justify-between">
                     <span>Model</span>
-                    {formData.provider === 'nvidia' && (
-                      <button 
-                        type="button" 
-                        onClick={handleFetchModels}
-                        disabled={fetchingModels}
-                        className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-50"
-                      >
-                        {fetchingModels ? 'Fetching...' : 'Fetch Models'}
-                      </button>
-                    )}
+                    <button 
+                      type="button" 
+                      onClick={handleFetchModels}
+                      disabled={fetchingModels}
+                      className="text-xs text-purple-400 hover:text-purple-300 disabled:opacity-50"
+                    >
+                      {fetchingModels ? 'Fetching...' : 'Fetch Models'}
+                    </button>
                   </label>
                   
                   {availableModels.length > 0 ? (
@@ -282,7 +276,7 @@ export default function AISettingsPage() {
                       type="text"
                       value={formData.model}
                       onChange={(e) => setFormData({ ...formData, model: e.target.value })}
-                      placeholder="gemini-flash-latest or nvidia/..."
+                      placeholder="meta/llama-3.1-8b-instruct or meta/llama-3.1-70b-instruct"
                       className="w-full bg-black/60 border border-zinc-800 rounded-xl px-4 py-2.5 text-white focus:outline-none focus:border-purple-500 transition-colors font-mono text-sm"
                     />
                   )}
@@ -333,19 +327,67 @@ export default function AISettingsPage() {
             <div className="h-px bg-zinc-800" />
 
             {/* System Instructions */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-zinc-200">System Instructions & Behavior</label>
-              <textarea
-                rows={6}
-                required
-                value={formData.system_instructions}
-                onChange={(e) => setFormData({ ...formData, system_instructions: e.target.value })}
-                className="w-full bg-black/60 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm font-sans leading-relaxed"
-                placeholder="Enter system prompt and response rules..."
-              />
-              <p className="text-xs text-zinc-500">
-                The AI combines these instructions with active webinar knowledge and approved resource links.
-              </p>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-200">System Instructions & Behavior (Base Prompt)</label>
+                <textarea
+                  rows={4}
+                  required
+                  value={formData.system_instructions}
+                  onChange={(e) => setFormData({ ...formData, system_instructions: e.target.value })}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm font-sans leading-relaxed"
+                  placeholder="Enter system prompt and response rules..."
+                />
+                <p className="text-xs text-zinc-500">
+                  The AI combines these instructions with active webinar knowledge and approved resource links.
+                </p>
+              </div>
+
+              <div className="h-px bg-zinc-800" />
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-200">Ignore Message Rules (Prompt)</label>
+                <textarea
+                  rows={3}
+                  value={formData.ignore_rules}
+                  onChange={(e) => setFormData({ ...formData, ignore_rules: e.target.value })}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm font-sans leading-relaxed"
+                  placeholder="e.g. Ignore messages that are just greetings like 'hi' or technical issues like 'awaz nahi aa rahi'..."
+                />
+                <p className="text-xs text-zinc-500">
+                  Explain in detail (with examples) which messages the AI should completely ignore without replying.
+                </p>
+              </div>
+
+              <div className="h-px bg-zinc-800" />
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-200">Pre-Pitch Prompt (Locked)</label>
+                <textarea
+                  rows={3}
+                  value={formData.pre_pitch_prompt}
+                  onChange={(e) => setFormData({ ...formData, pre_pitch_prompt: e.target.value })}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm font-sans leading-relaxed"
+                  placeholder="e.g. Do not reveal price. Say: Watch till the end..."
+                />
+                <p className="text-xs text-zinc-500">
+                  Rules for AI before the Pitch Time is reached (e.g. keeping course info secret).
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-zinc-200">Post-Pitch Prompt (Unlocked)</label>
+                <textarea
+                  rows={3}
+                  value={formData.post_pitch_prompt}
+                  onChange={(e) => setFormData({ ...formData, post_pitch_prompt: e.target.value })}
+                  className="w-full bg-black/60 border border-zinc-800 rounded-xl p-4 text-white focus:outline-none focus:border-purple-500 transition-colors text-sm font-sans leading-relaxed"
+                  placeholder="e.g. You can now reveal course prices and provide the checkout URL..."
+                />
+                <p className="text-xs text-zinc-500">
+                  Rules for AI after the Pitch Time is reached (e.g. revealing price and selling).
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end pt-2">
