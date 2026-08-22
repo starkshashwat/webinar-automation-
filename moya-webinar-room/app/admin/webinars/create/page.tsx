@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { AdminHeader } from '@/components/admin/admin-header';
-import { ArrowLeft, Bot, Video, Calendar, Clock, Sparkles, MessageSquare, Tag, Zap } from 'lucide-react';
+import { ArrowLeft, Bot, Video, Calendar, Clock, Sparkles, MessageSquare, Tag, Zap, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 export default function CreateWebinarPage() {
@@ -579,20 +579,51 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                             </div>
                           </div>
 
-                          <div className="space-y-1.5 pt-2 border-t border-purple-500/20">
-                            <label className="text-xs font-semibold text-zinc-300">Rotating Images (Image URLs separated by comma)</label>
-                            <div className="text-[10px] text-zinc-500">Cycles through your images on every banner interval</div>
-                            <input
-                              type="text"
-                              placeholder="https://example.com/banner1.jpg, https://example.com/banner2.jpg"
-                              value={formData.ai_cta_broadcast_images?.join(', ') || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                const arr = val.split(',').map(s => s.trim()).filter(s => s !== '');
-                                setFormData({ ...formData, ai_cta_broadcast_images: arr });
+                          <div className="space-y-3 pt-2 border-t border-purple-500/20">
+                            <label className="text-xs font-semibold text-zinc-300">Rotating Images (Add multiple URLs to cycle through)</label>
+                            <div className="text-[10px] text-zinc-500 mb-2">Cycles through your images on every banner interval</div>
+                            
+                            <div className="space-y-2">
+                              {(formData.ai_cta_broadcast_images || []).map((imgUrl, idx) => (
+                                <div key={idx} className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    placeholder="https://example.com/banner.jpg"
+                                    value={imgUrl}
+                                    onChange={(e) => {
+                                      const newImages = [...(formData.ai_cta_broadcast_images || [])];
+                                      newImages[idx] = e.target.value;
+                                      setFormData({ ...formData, ai_cta_broadcast_images: newImages });
+                                    }}
+                                    className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newImages = [...(formData.ai_cta_broadcast_images || [])];
+                                      newImages.splice(idx, 1);
+                                      setFormData({ ...formData, ai_cta_broadcast_images: newImages });
+                                    }}
+                                    className="p-2 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded-lg transition-colors border border-red-500/20 shrink-0"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                            
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setFormData({
+                                  ...formData,
+                                  ai_cta_broadcast_images: [...(formData.ai_cta_broadcast_images || []), '']
+                                });
                               }}
-                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-purple-500 text-sm font-medium"
-                            />
+                              className="w-full mt-2 py-2 border border-dashed border-purple-500/30 text-purple-400 rounded-lg hover:bg-purple-500/10 transition-colors text-xs font-bold uppercase tracking-wider"
+                            >
+                              + Add Image URL
+                            </button>
                           </div>
                         </div>
                       )}
@@ -652,6 +683,18 @@ When the Course Pitch unlocks, broadcast high-converting promotional CTAs to the
                               />
                             </div>
                           )}
+
+                          <div className="space-y-1.5 pt-2 border-t border-blue-500/20">
+                            <label className="text-xs font-semibold text-zinc-300">Custom System Prompt (Optional)</label>
+                            <div className="text-[10px] text-zinc-500">Add extra instructions for how the AI should write the promotional messages.</div>
+                            <textarea
+                              rows={3}
+                              placeholder="e.g. Always write in Hinglish and use emojis. Keep it under 2 lines."
+                              value={formData.ai_cta_broadcast_prompt || ''}
+                              onChange={(e) => setFormData({ ...formData, ai_cta_broadcast_prompt: e.target.value })}
+                              className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-blue-500 text-sm font-medium"
+                            />
+                          </div>
                         </div>
                       )}
 
