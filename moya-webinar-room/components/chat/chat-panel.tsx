@@ -199,16 +199,23 @@ export function ChatPanel({
     }
   };
 
-  // Strict privacy rules
+  // Strict privacy and display filtering rules
   const visibleMessages = messages.filter(msg => {
-    // 1. Host sees all chat messages
+    // Parse metadata safely (handles both JSON string and object from Postgres)
+    const meta = typeof msg.metadata === 'string' 
+      ? (() => { try { return JSON.parse(msg.metadata); } catch { return {}; } })() 
+      : (msg.metadata || {});
+
+    // 1. Flashcard / Banner messages MUST NEVER be rendered as chat bubbles in the chat log
+    if (msg.message_type === 'CTA' && (meta.type === 'BANNER' || meta.display_type === 'BANNER')) {
+      return false;
+    }
+
+    // 2. Host sees all valid chat messages
     if (isAdmin) return true;
 
-    // 2. Broadcasts (SYSTEM and CTA announcements) are visible to all attendees
+    // 3. Broadcasts (SYSTEM and In-Chat CTA announcements) are visible to all attendees
     if (['SYSTEM', 'CTA'].includes(msg.message_type)) {
-      if (msg.message_type === 'CTA' && msg.metadata?.type === 'BANNER') {
-        return false; // Do not show banner-only messages in the chat log
-      }
       return true;
     }
 

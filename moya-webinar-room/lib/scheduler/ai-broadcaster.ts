@@ -375,7 +375,9 @@ async function preGenerateAIBroadcasts(sessionId: string) {
     'Focus on fast-action scarcity, exclusive bonuses, and final opportunity to enroll.'
   ];
 
-  const bannerDelayMs = (webinar.ai_cta_banner_delay_seconds || 0) * 1000;
+  const bannerDelayMs = type === 'BOTH'
+    ? Math.max(30000, (webinar.ai_cta_banner_delay_seconds || 45) * 1000)
+    : (webinar.ai_cta_banner_delay_seconds || 0) * 1000;
   const bannerIntervalMinutes = Number(webinar.ai_cta_banner_interval_minutes) || Number(webinar.ai_cta_broadcast_interval_minutes) || 5;
   const chatIntervalMinutes = Number(webinar.ai_cta_broadcast_interval_minutes) || 5;
 
