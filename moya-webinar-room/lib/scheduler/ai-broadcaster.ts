@@ -142,12 +142,14 @@ export async function processAIBroadcasts() {
                 const knowledge = await getActiveKnowledge(webinar.id);
                 const resources = await getActiveResources(webinar.id);
                 const angles = [
-                  'Focus on program reveal, main value proposition, and why attendees should act now.',
-                  'Focus on student success proof, transformations, and tangible results.',
-                  'Focus on fast-action scarcity, exclusive bonuses, and final opportunity to enroll.'
+                  'Angle: Desire & Transformation (Highlight the outcome, skills, and value students achieve with the program).',
+                  'Angle: Social Proof & Student Success (Highlight verified student transformations and case studies from knowledge base).',
+                  'Angle: Value Contrast & Risk Reduction (Contrast time wasted trying alone vs structured system and direct support).',
+                  'Angle: Fast-Action Urgency & Bonuses (Highlight limited bonuses, live mentorship spots, or time-sensitive opportunity).'
                 ];
                 const angle = angles[processedCount % angles.length];
-                finalMessage = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle) || 'Don\'t miss out on this offer!';
+                const displayType = (b.display_type as 'CHAT' | 'BANNER' | 'BOTH') || 'CHAT';
+                finalMessage = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle, displayType) || 'Don\'t miss out on this exclusive opportunity!';
               } catch (err) {
                 console.error('[AI Broadcaster] On-the-fly generation failed:', err);
                 // Reschedule for next tick to try again, or fallback

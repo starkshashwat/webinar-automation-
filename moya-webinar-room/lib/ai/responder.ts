@@ -268,25 +268,28 @@ Please evaluate this message and output a valid JSON object with this EXACT sche
 
 /**
  * Generates an on-the-fly proactive AI CTA promotional broadcast message.
+ * Molds Knowledge Base facts with Sales Psychology instructions from the broadcaster prompt.
  */
 export async function generateAIBroadcastCTA(
   webinar: any,
   settings: AISettings,
   knowledge: AIKnowledge[],
   resources: AIResource[],
-  angleInstruction?: string
+  angleInstruction?: string,
+  displayType: 'CHAT' | 'BANNER' | 'BOTH' = 'CHAT'
 ): Promise<string | null> {
   const provider = getAIProvider(settings);
   
-  const kbFormatted = knowledge.length > 0 
-    ? knowledge.map((k, i) => `[Entry ${i + 1}] Title: ${k.title}\nContent: ${k.content}`).join('\n\n')
-    : '(No custom knowledge base entries configured.)';
+  // Format Knowledge Base as raw factual points (not Q&A) so the AI synthesizes them psychologically
+  const kbFacts = knowledge.length > 0 
+    ? knowledge.map((k) => `• ${k.title}: ${k.content}`).join('\n')
+    : 'Approved program details and curriculum from webinar context.';
 
   const resourcesFormatted = resources.length > 0
-    ? resources.map((r) => `- Resource ID: "${r.id}" | Name: "${r.name}" | Description: "${r.description || ''}" | URL: "${r.url}"`).join('\n')
-    : '(No approved resources configured)';
+    ? resources.map((r) => `- Resource: "${r.name}" (${r.description || ''}) => ${r.url}`).join('\n')
+    : '(No extra approved resources)';
 
-  // Resolve the exact payment/course URL strictly from Webinar Settings:
+  // Resolve the exact payment/course URL strictly from Webinar Settings (Single Source of Truth)
   let exactCourseUrl = webinar.course_url?.trim() || '';
   if (!exactCourseUrl && webinar.ai_cta_broadcast_prompt) {
     const urlMatch = (webinar.ai_cta_broadcast_prompt as string).match(/(https?:\/\/[^\s]+)/i);
@@ -295,35 +298,43 @@ export async function generateAIBroadcastCTA(
     }
   }
 
-  const customPrompt = webinar.ai_cta_broadcast_prompt 
-    ? `\n# HOST/BROADCAST INSTRUCTIONS & COURSE DETAILS:\n${webinar.ai_cta_broadcast_prompt}\n` 
-    : '';
-
-  const anglePrompt = angleInstruction 
-    ? `\n# SPECIFIC ANGLE FOR THIS MESSAGE:\n${angleInstruction}\n` 
-    : '';
+  const isBanner = displayType === 'BANNER';
 
   const systemInstruction = `
-You are the official webinar assistant/host for "${webinar.title}".
-Your task is to craft a short, engaging, and high-converting Call-To-Action (CTA) promotional message to broadcast into the live webinar public chat.
+# ROLE & PRIMARY OBJECTIVE:
+You are the high-converting AI Sales Broadcaster for "${webinar.title}".
+Your objective is to proactively write persuasive, high-converting Call-To-Action (CTA) promotional messages to broadcast to the live webinar audience.
 
-CRITICAL LINK REQUIREMENT:
-${exactCourseUrl ? `You MUST include the exact literal payment/course URL: ${exactCourseUrl}\nDo NOT replace this URL with placeholders like "[link provided in webinar description]" or "[link]". Output the actual URL.` : 'Do not invent any link.'}
+IMPORTANT: This is NOT a question-answering task. Do NOT output Q&A.
+You must take the verified curriculum, benefits, pricing, bonuses, and student results from the "KNOWLEDGE FACTS" below and mold them using the psychological triggers defined in "SALES PSYCHOLOGY & BROADCAST INSTRUCTIONS".
 
-${customPrompt}
-${anglePrompt}
-# WEBINAR KNOWLEDGE & CONTEXT:
-${kbFormatted}
+# SALES PSYCHOLOGY & BROADCAST INSTRUCTIONS:
+${webinar.ai_cta_broadcast_prompt || settings.post_pitch_prompt || 'Proactively communicate the program value, bonuses, and transformation.'}
+
+# SPECIFIC ROTATING ANGLE FOR THIS BROADCAST WAVE:
+${angleInstruction || 'Focus on student transformation, practical skills gained, and why they should enroll now.'}
+
+# KNOWLEDGE FACTS (FACTUAL FOUNDATION):
+${kbFacts}
 
 # APPROVED RESOURCES:
 ${resourcesFormatted}
 
-GUIDELINES:
-1. Make the message compelling, natural, and persuasive.
-2. Highlight specific bonuses, results, value, or scarcity from the instructions.
-3. Keep the message concise (3-8 short lines).
-4. Ground every claim strictly in the Knowledge Source. NEVER invent prices, fake promises, or unverified claims.
-${exactCourseUrl ? `5. If providing a link, include the exact URL: ${exactCourseUrl}` : ''}
+# FORMATTING & COPYWRITING RULES:
+${isBanner ? `
+- This message will display as an ON-SCREEN FLASH BANNER / NOTIFICATION.
+- Write a high-impact, punchy Headline (1 line) + Brief Urgency/Value Subtext (1-2 lines).
+- Keep total length to 2-3 short lines maximum.
+` : `
+- This message will broadcast directly into the LIVE PUBLIC CHAT.
+- Write 3 to 6 short, punchy, conversational lines.
+- Use line breaks (Enter) between lines so the message is clean, spacious, and easily readable.
+- Apply psychological triggers naturally (e.g. Desire, Social Proof, Value Contrast, Urgency, Risk Reduction).
+- End with an inspiring, action-oriented call to action.
+`}
+
+# HARDCODED ENROLLMENT LINK:
+${exactCourseUrl ? `Official Course URL: "${exactCourseUrl}"` : '(No URL configured)'}
 `;
 
   const userPrompt = `
@@ -333,20 +344,9 @@ Please generate the promotional CTA message and output a valid JSON object with 
   "confidence": "HIGH",
   "response_mode": "public",
   "matched_resource_id": null,
-  "response": "Your promotional message text here"
+  "response": "Your persuasive promotional message text here"
 }
 `;
-
-  const dummyMessage: ChatMessage = {
-    id: 'broadcast-dummy',
-    session_id: 'dummy',
-    attendee_id: null,
-    target_attendee_id: null,
-    sender_name: 'SYSTEM',
-    message: 'GENERATE_CTA_BROADCAST',
-    message_type: 'SYSTEM',
-    created_at: new Date().toISOString()
-  };
 
   try {
     const result = await provider.generateResponse({
@@ -359,15 +359,21 @@ Please generate the promotional CTA message and output a valid JSON object with 
     });
 
     if (result.status === 'processed' && result.response) {
-      let finalStr = result.response;
-      // Clean up any hallucinated placeholder text with the actual course URL
+      let text = result.response.trim();
+      
+      // Clean up any hallucinated placeholder text
+      text = text.replace(/\[(?:link provided in webinar description|link provided|link|url|current url|current webinar course url|payment link)\]/gi, '').trim();
+
+      // Ensure the hardcoded link is cleanly separated with Enter / newline and prominent CTA icon
       if (exactCourseUrl) {
-        finalStr = finalStr.replace(/\[(?:link provided in webinar description|link provided|link|url|current url|current webinar course url|payment link)\]/gi, exactCourseUrl);
-        if (!finalStr.includes(exactCourseUrl)) {
-          finalStr += `\n\n👉 ${exactCourseUrl}`;
+        if (text.includes(exactCourseUrl)) {
+          // If the link is attached directly to text without newline, insert clean double newline before it
+          text = text.replace(new RegExp(`([^\n])\\s*${exactCourseUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'g'), `$1\n\n👉 ${exactCourseUrl}`);
+        } else {
+          text += `\n\n👉 ${exactCourseUrl}`;
         }
       }
-      return finalStr;
+      return text;
     }
 
     console.warn('[AI Responder] LLM generation failed (' + (result.errorMessage || 'unknown') + '), using fallback CTA.');
