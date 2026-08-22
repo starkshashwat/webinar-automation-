@@ -54,37 +54,45 @@ export async function POST(request: Request) {
       }
     }
 
-    // Try to find existing registration by phone for this webinar (dedup)
+    // Try to find existing registration by normalized phone or email for this webinar (dedup)
     let attendee: any = null;
     const trimmedEmail = email ? email.trim().toLowerCase() : null;
     const trimmedPhone = phone ? phone.trim() : null;
+    const cleanPhoneDigits = trimmedPhone ? trimmedPhone.replace(/[^0-9]/g, '').slice(-10) : null;
 
-    if (trimmedPhone) {
-      const { data: existing } = await adminSupabase
-        .from('webinar_registrations')
-        .select('*')
-        .eq('webinar_id', webinar_id)
-        .eq('phone', trimmedPhone)
-        .limit(1)
-        .maybeSingle();
+    const { data: existingList } = await adminSupabase
+      .from('webinar_registrations')
+      .select('*')
+      .eq('webinar_id', webinar_id);
 
-      if (existing) {
-        // Found existing registration — reuse it and update name/email if changed
-        const updates: any = {};
-        if (existing.name !== name.trim()) updates.name = name.trim();
-        if (existing.email !== trimmedEmail) updates.email = trimmedEmail;
+    const existing = (existingList || []).find((r: any) => {
+      if (cleanPhoneDigits && r.phone) {
+        const rDigits = r.phone.replace(/[^0-9]/g, '').slice(-10);
+        if (rDigits && rDigits === cleanPhoneDigits) return true;
+      }
+      if (trimmedEmail && r.email && r.email.trim().toLowerCase() === trimmedEmail) {
+        return true;
+      }
+      return false;
+    });
 
-        if (Object.keys(updates).length > 0) {
-          const { data: updated } = await adminSupabase
-            .from('webinar_registrations')
-            .update(updates)
-            .eq('id', existing.id)
-            .select()
-            .single();
-          attendee = updated || existing;
-        } else {
-          attendee = existing;
-        }
+    if (existing) {
+      // Found existing registration — reuse it and update name/email/phone if changed
+      const updates: any = {};
+      if (existing.name !== name.trim()) updates.name = name.trim();
+      if (trimmedEmail && existing.email !== trimmedEmail) updates.email = trimmedEmail;
+      if (trimmedPhone && existing.phone !== trimmedPhone) updates.phone = trimmedPhone;
+
+      if (Object.keys(updates).length > 0) {
+        const { data: updated } = await adminSupabase
+          .from('webinar_registrations')
+          .update(updates)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        attendee = updated || existing;
+      } else {
+        attendee = existing;
       }
     }
 
