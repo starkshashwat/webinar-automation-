@@ -206,6 +206,7 @@ export function WebinarRoom({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (presenceChannel) supabase.removeChannel(presenceChannel);
       clearInterval(heartbeatInterval);
+    };
   }, [normalizedStatus, session?.started_at, session?.id, webinar.id, supabase]);
 
   const toggleFullscreen = () => {

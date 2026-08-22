@@ -23,7 +23,6 @@ export function VideoPlayer({
   startedAt?: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [timeOffset, setTimeOffset] = useState<number>(0);
 
   // Sync server time offset
