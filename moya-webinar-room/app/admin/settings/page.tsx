@@ -82,7 +82,7 @@ export default function SettingsPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           update_platform_settings: true,
-          brand_name: brandName.trim(),
+          brand_name: brandName,
           logo_url: logoUrl.trim() || null,
           favicon_url: faviconUrl.trim() || null,
         })

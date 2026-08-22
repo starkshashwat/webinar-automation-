@@ -19,7 +19,7 @@ import {
 export function AdminHeader() {
   const pathname = usePathname();
   const [branding, setBranding] = useState<{ logo_url?: string | null; favicon_url?: string | null; brand_name?: string | null }>({
-    brand_name: 'MOYA ADMIN'
+    brand_name: '' // Start empty to prevent flash of hardcoded text
   });
 
   useEffect(() => {
@@ -28,7 +28,13 @@ export function AdminHeader() {
       .then(data => {
         const logo = data.primaryDomain?.logo_url || data.platformSettings?.logo_url;
         const favicon = data.primaryDomain?.favicon_url || data.platformSettings?.favicon_url;
-        const name = data.platformSettings?.brand_name ?? 'Admin';
+        
+        // If brand_name is explicitly empty string, respect it. Only fallback if strictly undefined or null.
+        let name = data.platformSettings?.brand_name;
+        if (name === null || name === undefined) {
+          name = '';
+        }
+        
         setBranding({ logo_url: logo, favicon_url: favicon, brand_name: name });
 
         // Update document favicon dynamically
