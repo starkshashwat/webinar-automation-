@@ -334,7 +334,6 @@ export function WebinarRoom({
                   mode="overlay"
                   message={activeBanner} 
                   onClose={() => setActiveBanner(null)}
-                  onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
                   webinarId={webinar.id}
                   attendeeId={attendeeId}
                 />
@@ -360,7 +359,6 @@ export function WebinarRoom({
                 mode="sidebar"
                 message={activeBanner} 
                 onClose={() => setActiveBanner(null)}
-                onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
                 webinarId={webinar.id}
                 attendeeId={attendeeId}
               />

@@ -52,22 +52,17 @@ export function VideoPlayer({
     }
   }, [isMuted]);
 
-  // PiP Listener
+  // Native Auto-PiP Setup (Option 1 Implementation)
   useEffect(() => {
-    const handlePiP = async () => {
-      if (videoRef.current && document.pictureInPictureEnabled) {
-        try {
-          if (document.pictureInPictureElement !== videoRef.current) {
-            await videoRef.current.requestPictureInPicture();
-          }
-        } catch (err) {
-          console.error('PiP failed', err);
-        }
+    if (videoRef.current) {
+      // Ensure PiP is allowed
+      videoRef.current.disablePictureInPicture = false;
+      // Enable Chrome/modern browser auto-PiP on tab switch/minimize
+      if ('autoPictureInPicture' in videoRef.current) {
+        (videoRef.current as any).autoPictureInPicture = true;
       }
-    };
-    window.addEventListener('requestPiP', handlePiP);
-    return () => window.removeEventListener('requestPiP', handlePiP);
-  }, []);
+    }
+  }, [url]);
 
   // Global Time Sync Effect
   useEffect(() => {
