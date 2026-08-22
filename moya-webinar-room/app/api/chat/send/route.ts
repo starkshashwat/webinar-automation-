@@ -71,9 +71,10 @@ export async function POST(request: Request) {
       if (foundSession) {
         validSessionId = foundSession.id;
       } else {
+        const sessionStatus = (webinar?.status === 'LIVE' || webinar?.status === 'live') ? 'LIVE' : 'WAITING';
         const { data: newSession, error: createSessionErr } = await adminSupabase
           .from('webinar_sessions')
-          .insert([{ webinar_id: targetWebinarId, status: 'LIVE' }])
+          .insert([{ webinar_id: targetWebinarId, status: sessionStatus }])
           .select('id')
           .single();
 

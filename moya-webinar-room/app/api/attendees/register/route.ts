@@ -26,17 +26,25 @@ export async function POST(request: Request) {
     // Find the most recent session for this webinar
     let { data: session } = await adminSupabase
       .from('webinar_sessions')
-      .select('id')
+      .select('id, status')
       .eq('webinar_id', webinar_id)
-      .order('started_at', { ascending: false })
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
     if (!session) {
+      const { data: w } = await adminSupabase
+        .from('webinars')
+        .select('status')
+        .eq('id', webinar_id)
+        .single();
+
+      const sessionStatus = (w?.status === 'LIVE' || w?.status === 'live') ? 'LIVE' : 'WAITING';
+
       const { data: newSession, error: sessionError } = await adminSupabase
         .from('webinar_sessions')
-        .insert([{ webinar_id, status: 'LIVE' }])
-        .select('id')
+        .insert([{ webinar_id, status: sessionStatus }])
+        .select('id, status')
         .single();
         
       if (sessionError) {

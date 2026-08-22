@@ -129,13 +129,24 @@ export async function generateAIResponse({
 
   // Calculate Course Pitch gating logic
   let courseSalesLocked = false;
-  if (webinar.course_pitch_enabled && session?.started_at) {
-    const startedAtTime = new Date(session.started_at).getTime();
-    const delayMs = (webinar.course_pitch_delay_minutes || 0) * 60000;
-    const unlockTime = startedAtTime + delayMs;
-    
-    if (Date.now() < unlockTime) {
+  if (webinar.course_pitch_enabled) {
+    const isLive = webinar.status === 'LIVE' || webinar.status === 'live';
+    if (!isLive) {
       courseSalesLocked = true;
+    } else {
+      const effectiveStart = webinar.scheduled_start
+        ? new Date(webinar.scheduled_start).getTime()
+        : session?.started_at
+        ? new Date(session.started_at).getTime()
+        : webinar.started_at
+        ? new Date(webinar.started_at).getTime()
+        : Date.now();
+      const delayMs = ((webinar.course_pitch_delay_minutes || 0) * 60000) + ((webinar.course_pitch_delay_seconds || 0) * 1000);
+      const unlockTime = effectiveStart + delayMs;
+      
+      if (Date.now() < unlockTime) {
+        courseSalesLocked = true;
+      }
     }
   }
 

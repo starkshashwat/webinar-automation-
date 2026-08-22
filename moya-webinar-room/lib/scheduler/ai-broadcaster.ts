@@ -14,7 +14,7 @@ export async function processAIBroadcasts() {
 
     const { data: pendingBroadcasts, error: fetchError } = await supabase
       .from('webinar_broadcast_queue')
-      .select('*, webinars(id, ai_cta_broadcast_max_count, ai_cta_broadcast_interval_minutes, ai_cta_banner_duration_seconds, ai_cta_broadcast_end_condition)')
+      .select('*, webinars(id, title, status, course_url, course_pitch_enabled, course_pitch_delay_minutes, course_pitch_delay_seconds, scheduled_start, started_at, actual_start_at, ai_cta_broadcast_max_count, ai_cta_broadcast_interval_minutes, ai_cta_banner_duration_seconds, ai_cta_banner_interval_minutes, ai_cta_broadcast_end_condition, ai_cta_broadcast_prompt), webinar_sessions(id, status, started_at)')
       .eq('status', 'PENDING')
       .lte('scheduled_for', nowIso)
       .order('scheduled_for', { ascending: true });
@@ -36,6 +36,44 @@ export async function processAIBroadcasts() {
 
       for (const [sessionId, items] of sessionMap.entries()) {
         const webinar = items[0]?.webinars as any;
+        const session = items[0]?.webinar_sessions as any;
+
+        // STRICT CHECK 1: Webinar AND Session must be currently LIVE
+        const isWebinarLive = webinar?.status === 'LIVE' || webinar?.status === 'live';
+        const isSessionLive = session?.status === 'LIVE' || session?.status === 'live';
+        if (!isWebinarLive || !isSessionLive) {
+          // If webinar is NOT live, NEVER send any broadcast!
+          continue;
+        }
+
+        // STRICT CHECK 2: Is pitch enabled?
+        if (webinar?.course_pitch_enabled === false) {
+          await supabase
+            .from('webinar_broadcast_queue')
+            .update({ status: 'CANCELLED', updated_at: nowIso })
+            .eq('session_id', sessionId)
+            .eq('status', 'PENDING');
+          continue;
+        }
+
+        // STRICT CHECK 3: Has the exact unlock time been reached?
+        const effectiveStart = webinar?.scheduled_start 
+          ? new Date(webinar.scheduled_start).getTime()
+          : session?.started_at 
+          ? new Date(session.started_at).getTime()
+          : webinar?.started_at 
+          ? new Date(webinar.started_at).getTime()
+          : 0;
+
+        const pitchDelayMinsMs = (webinar?.course_pitch_delay_minutes || 0) * 60000;
+        const pitchDelaySecsMs = (webinar?.course_pitch_delay_seconds || 0) * 1000;
+        const unlockTime = effectiveStart + pitchDelayMinsMs + pitchDelaySecsMs;
+
+        if (now.getTime() < unlockTime) {
+          // Pitch unlock has NOT arrived yet. NEVER send early!
+          continue;
+        }
+
         const maxCount = webinar?.ai_cta_broadcast_max_count || 3;
         const endCondition = webinar?.ai_cta_broadcast_end_condition || 'MAX_COUNT';
         const chatIntervalMinutes = webinar?.ai_cta_broadcast_interval_minutes || 5;
@@ -190,6 +228,10 @@ export async function processAIBroadcasts() {
       for (const session of activeSessions) {
         const webinar = session.webinars as any;
         
+        // STRICT: Both session AND webinar must be LIVE
+        if (!webinar || (webinar.status !== 'LIVE' && webinar.status !== 'live')) {
+          continue;
+        }
         if (webinar.ai_enabled === false || webinar.course_pitch_enabled === false) {
           continue;
         }
@@ -233,11 +275,20 @@ async function preGenerateAIBroadcasts(sessionId: string) {
     .eq('id', sessionId)
     .single();
 
-  if (!session || !session.started_at) return;
+  if (!session) return;
 
   const webinar = session.webinars as any;
+  if (!webinar) return;
+
+  // STRICT: Webinar and session must both be LIVE
+  const isWebinarLive = webinar.status === 'LIVE' || webinar.status === 'live';
+  const isSessionLive = session.status === 'LIVE' || session.status === 'live';
+  if (!isWebinarLive || !isSessionLive) {
+    console.log(`[AI Broadcaster] Skipping pre-generation for session ${sessionId}: Webinar is not LIVE (Webinar: ${webinar.status}, Session: ${session.status})`);
+    return;
+  }
+
   const settings = await getAISettings();
-  
   if (settings.is_enabled_globally === false) return;
 
   // Double check again in database to prevent race conditions
@@ -251,10 +302,17 @@ async function preGenerateAIBroadcasts(sessionId: string) {
     return;
   }
 
-  const startedAtTime = new Date(session.started_at).getTime();
+  const effectiveStart = webinar.scheduled_start 
+    ? new Date(webinar.scheduled_start).getTime()
+    : session.started_at 
+    ? new Date(session.started_at).getTime()
+    : webinar.started_at 
+    ? new Date(webinar.started_at).getTime()
+    : Date.now();
+
   const pitchDelayMinsMs = (webinar.course_pitch_delay_minutes || 0) * 60000;
   const pitchDelaySecsMs = (webinar.course_pitch_delay_seconds || 0) * 1000;
-  const unlockTime = startedAtTime + pitchDelayMinsMs + pitchDelaySecsMs;
+  const unlockTime = effectiveStart + pitchDelayMinsMs + pitchDelaySecsMs;
 
   const type = webinar.ai_cta_broadcast_type || 'CHAT';
   const freq = webinar.ai_cta_broadcast_frequency || 'EXACT';

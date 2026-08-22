@@ -38,21 +38,31 @@ export class SupabaseWebinarProvider implements WebinarProvider {
       })
       .eq('id', webinarId);
 
-    // Create a new session if one doesn't exist
+    // Find the latest session for this webinar
     const { data: existingSession } = await this.supabase
       .from('webinar_sessions')
       .select('id')
       .eq('webinar_id', webinarId)
-      .eq('status', 'LIVE')
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 
-    if (!existingSession) {
+    if (existingSession) {
+      await this.supabase
+        .from('webinar_sessions')
+        .update({
+          status: 'LIVE',
+          started_at: now,
+          actual_start_at: now
+        })
+        .eq('id', existingSession.id);
+    } else {
       await this.supabase
         .from('webinar_sessions')
         .insert([{
           webinar_id: webinarId,
           started_at: now,
+          actual_start_at: now,
           status: 'LIVE'
         }]);
     }
@@ -79,6 +89,13 @@ export class SupabaseWebinarProvider implements WebinarProvider {
       })
       .eq('webinar_id', webinarId)
       .eq('status', 'LIVE');
+
+    // Cancel all remaining pending broadcast items for this webinar
+    await this.supabase
+      .from('webinar_broadcast_queue')
+      .update({ status: 'CANCELLED', updated_at: now })
+      .eq('webinar_id', webinarId)
+      .eq('status', 'PENDING');
   }
 
   async getAttendees(webinarId: string): Promise<Attendee[]> {

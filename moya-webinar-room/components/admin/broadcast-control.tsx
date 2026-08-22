@@ -36,7 +36,7 @@ export function BroadcastControl({
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [nextBroadcastTime, setNextBroadcastTime] = useState<string>('');
 
-  const isLive = session?.status === 'LIVE' || session?.status === 'live';
+  const isLive = (webinar.status === 'LIVE' || webinar.status === 'live') && (session?.status === 'LIVE' || session?.status === 'live' || !session);
   const isPitchEnabled = webinar.course_pitch_enabled;
   const pitchDelayMins = webinar.course_pitch_delay_minutes || 0;
   const pitchDelaySecs = webinar.course_pitch_delay_seconds || 0;
@@ -101,14 +101,22 @@ export function BroadcastControl({
   // Real-time timers calculation
   useEffect(() => {
     const updateTimers = () => {
-      if (!isLive || !session?.started_at) {
-        setTimeRemaining('Session not started');
-        setNextBroadcastTime('');
+      const isActuallyLive = (webinar.status === 'LIVE' || webinar.status === 'live');
+      if (!isActuallyLive) {
+        setTimeRemaining('Stream not live');
+        setNextBroadcastTime('Waiting for stream start');
         return;
       }
 
-      const startedAt = new Date(session.started_at).getTime();
-      const unlockTime = startedAt + (pitchDelayMins * 60000) + (pitchDelaySecs * 1000);
+      const effectiveStart = webinar.scheduled_start
+        ? new Date(webinar.scheduled_start).getTime()
+        : session?.started_at
+        ? new Date(session.started_at).getTime()
+        : webinar.started_at
+        ? new Date(webinar.started_at).getTime()
+        : Date.now();
+
+      const unlockTime = effectiveStart + (pitchDelayMins * 60000) + (pitchDelaySecs * 1000);
       const now = Date.now();
 
       if (now < unlockTime) {
@@ -141,7 +149,7 @@ export function BroadcastControl({
     updateTimers();
     const interval = setInterval(updateTimers, 1000);
     return () => clearInterval(interval);
-  }, [isLive, session?.started_at, pitchDelayMins, pitchDelaySecs, lastCtaTime, ctaCount, maxCount, intervalMins, endCondition]);
+  }, [webinar.status, webinar.scheduled_start, webinar.started_at, session?.started_at, pitchDelayMins, pitchDelaySecs, lastCtaTime, ctaCount, maxCount, intervalMins, endCondition]);
 
   const handleManualBroadcast = async () => {
     setBroadcasting(true);
