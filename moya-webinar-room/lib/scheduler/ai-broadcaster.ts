@@ -101,24 +101,29 @@ export async function processAIBroadcasts() {
         const bannerIntervalMinutes = Number(webinar?.ai_cta_banner_interval_minutes) || chatIntervalMinutes;
         const bannerDuration = webinar?.ai_cta_banner_duration_seconds || 30;
 
-        // Process CHAT and BANNER independently
+        // Process CHAT and BANNER independently with strict interval pacing
         for (const displayType of ['CHAT', 'BANNER']) {
           const typeItems = items.filter(i => i.display_type === displayType);
           if (typeItems.length === 0) continue;
 
-          // Count how many of this specific type have been sent
+          // 1. Fetch recent sent CTA messages for this session to verify strict interval pacing & count
           const { data: sentMessages } = await supabase
             .from('chat_messages')
-            .select('metadata')
+            .select('created_at, metadata')
             .eq('session_id', sessionId)
-            .eq('message_type', 'CTA');
+            .eq('message_type', 'CTA')
+            .order('created_at', { ascending: false });
 
-          const currentSent = (sentMessages || []).filter(msg => {
-            const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : (msg.metadata || {});
-            return meta.type === displayType || meta.type === 'BOTH';
-          }).length;
+          const matchingSent = (sentMessages || []).filter(msg => {
+            const meta = typeof msg.metadata === 'string' 
+              ? (() => { try { return JSON.parse(msg.metadata); } catch { return {}; } })() 
+              : (msg.metadata || {});
+            return meta.type === displayType;
+          });
 
-          // If MAX_COUNT is reached for this type, cancel remaining
+          const currentSent = matchingSent.length;
+
+          // If MAX_COUNT is reached for this type, cancel all remaining pending items
           if (endCondition === 'MAX_COUNT' && currentSent >= maxCount) {
             await supabase
               .from('webinar_broadcast_queue')
@@ -129,15 +134,29 @@ export async function processAIBroadcasts() {
             continue;
           }
 
-          // Identify earliest wave for this type
+          // 2. STRICT PACING LOCK: Ensure full configured interval has elapsed since the last sent message of this type
+          const intervalMins = displayType === 'BANNER' ? bannerIntervalMinutes : chatIntervalMinutes;
+          const minGapMs = Math.max(20000, (intervalMins * 60000) - 15000); // interval minus 15s tolerance
+
+          if (matchingSent.length > 0) {
+            const lastSentTime = new Date(matchingSent[0].created_at).getTime();
+            if (now.getTime() - lastSentTime < minGapMs) {
+              // Interval has NOT elapsed yet since last message of this type. Skip to prevent double-messaging!
+              continue;
+            }
+          }
+
+          // 3. Identify earliest wave for this type
           const earliestTime = new Date(typeItems[0].scheduled_for).getTime();
           const currentWaveItems = typeItems.filter(
             (item) => Math.abs(new Date(item.scheduled_for).getTime() - earliestTime) <= 5000
           );
 
+          // For BANNER, strictly send 1. For CHAT, use batchSize (or 1 if batchSize=1).
+          const maxBatchAllowed = displayType === 'BANNER' ? 1 : Math.max(1, Math.min(webinar?.ai_cta_broadcast_batch_size || 1, 5));
           const allowedInThisWave = endCondition === 'MAX_COUNT' 
-            ? Math.min(currentWaveItems.length, maxCount - currentSent)
-            : currentWaveItems.length;
+            ? Math.min(currentWaveItems.length, maxCount - currentSent, maxBatchAllowed)
+            : Math.min(currentWaveItems.length, maxBatchAllowed);
 
           const toSend = currentWaveItems.slice(0, allowedInThisWave);
 
@@ -167,16 +186,14 @@ export async function processAIBroadcasts() {
                   'Angle: Fast-Action Urgency & Bonuses (Highlight limited bonuses, live mentorship spots, or time-sensitive opportunity).'
                 ];
                 const angle = angles[processedCount % angles.length];
-                const displayType = (b.display_type as 'CHAT' | 'BANNER' | 'BOTH') || 'CHAT';
-                finalMessage = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle, displayType) || 'Don\'t miss out on this exclusive opportunity!';
+                finalMessage = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle, displayType as any) || 'Don\'t miss out on this exclusive opportunity!';
               } catch (err) {
                 console.error('[AI Broadcaster] On-the-fly generation failed:', err);
-                // Reschedule for next tick to try again, or fallback
                 await supabase
                   .from('webinar_broadcast_queue')
                   .update({ message: b.message, status: 'PENDING', updated_at: nowIso })
                   .eq('id', b.id);
-                continue; // Skip insertion for now
+                continue;
               }
             }
 
@@ -188,7 +205,7 @@ export async function processAIBroadcasts() {
             }
 
             const metadata = {
-              type: b.display_type || 'CHAT',
+              type: displayType,
               imageUrl: b.image_url || null,
               bannerDuration: bannerDuration,
               courseUrl: exactCourseUrl || null
@@ -212,7 +229,7 @@ export async function processAIBroadcasts() {
             processedCount++;
           }
 
-          // Cancel excess in wave
+          // Cancel any excess items in this current wave
           const excessInWave = currentWaveItems.slice(allowedInThisWave);
           for (const ex of excessInWave) {
             await supabase
@@ -221,13 +238,12 @@ export async function processAIBroadcasts() {
               .eq('id', ex.id);
           }
 
-          // Anti-spam rescheduling for remaining overdue items of this type
+          // Reschedule any remaining overdue past items of this type to future interval slots
           const remainingPastItems = typeItems.filter(
             (item) => !currentWaveItems.includes(item)
           );
 
           if (remainingPastItems.length > 0) {
-            const intervalMins = displayType === 'BANNER' ? bannerIntervalMinutes : chatIntervalMinutes;
             for (let idx = 0; idx < remainingPastItems.length; idx++) {
               const item = remainingPastItems[idx];
               const nextScheduled = new Date(now.getTime() + (idx + 1) * intervalMins * 60000).toISOString();

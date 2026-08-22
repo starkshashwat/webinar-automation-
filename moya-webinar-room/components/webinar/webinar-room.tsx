@@ -100,8 +100,10 @@ export function WebinarRoom({
         },
         (payload) => {
           const msg = payload.new as ChatMessage;
-          const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : (msg.metadata || {});
-          if (msg.message_type === 'CTA' && (meta.type === 'BANNER' || meta.type === 'BOTH')) {
+          const meta = typeof msg.metadata === 'string' 
+            ? (() => { try { return JSON.parse(msg.metadata); } catch { return {}; } })() 
+            : (msg.metadata || {});
+          if (msg.message_type === 'CTA' && (meta.type === 'BANNER' || meta.type === 'BOTH' || meta.display_type === 'BANNER')) {
             setActiveBanner({ ...msg, metadata: meta });
           }
         }
