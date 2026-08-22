@@ -87,9 +87,10 @@ export async function processAIBroadcasts() {
 
             const { data: claimed, error: claimError } = await supabase
               .from('webinar_broadcast_queue')
-              .update({ status: 'PROCESSING', updated_at: nowIso })
+              .update({ message: '[PROCESSING_GENERATION]', updated_at: nowIso })
               .eq('id', b.id)
               .eq('status', 'PENDING')
+              .eq('message', b.message)
               .select('id')
               .single();
 
@@ -112,7 +113,7 @@ export async function processAIBroadcasts() {
                 // Reschedule for next tick to try again, or fallback
                 await supabase
                   .from('webinar_broadcast_queue')
-                  .update({ status: 'PENDING', updated_at: nowIso })
+                  .update({ message: b.message, status: 'PENDING', updated_at: nowIso })
                   .eq('id', b.id);
                 continue; // Skip insertion for now
               }

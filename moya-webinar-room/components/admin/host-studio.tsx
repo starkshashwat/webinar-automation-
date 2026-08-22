@@ -308,7 +308,7 @@ export function HostStudio({
 
   const videoUrl = webinar.recording_url || webinar.video_url;
   // Ensure we use the exact DB timestamp if available to prevent host/attendee desync
-  const startedAt = session?.started_at || webinar.actual_start_at || webinar.started_at || (status === 'LIVE' ? (webinar.scheduled_start || new Date().toISOString()) : undefined);
+  const startedAt = webinar.scheduled_start || session?.started_at || webinar.actual_start_at || webinar.started_at || undefined;
 
   return (
     <main className="flex-1 p-4 lg:p-5 min-h-0 flex flex-col overflow-y-auto">

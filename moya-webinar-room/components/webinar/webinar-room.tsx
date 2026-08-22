@@ -306,7 +306,7 @@ export function WebinarRoom({
                 status={normalizedStatus}
                 isMuted={isMuted}
                 isFullscreen={isFullscreen}
-                startedAt={session?.started_at}
+                startedAt={webinar.scheduled_start || session?.started_at || webinar.actual_start_at || webinar.started_at || undefined}
                 hideOverlay={!!activeBanner}
               />
               
