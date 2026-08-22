@@ -7,7 +7,7 @@ import { BroadcastControl } from '@/components/admin/broadcast-control';
 import { AdminChatContainer } from '@/components/admin/admin-chat-container';
 import { VideoPlayer } from '@/components/webinar/video-player';
 import { createClient } from '@/lib/supabase/client';
-import { Settings, Play, Square, ExternalLink, Tv, Clock, RotateCcw, Radio, Users, History, Eye, X, Mail, Phone, BarChart, Copy } from 'lucide-react';
+import { Settings, Play, Square, ExternalLink, Tv, Clock, RotateCcw, Radio, Users, History, Eye, X, Mail, Phone, BarChart, Copy, MousePointerClick } from 'lucide-react';
 import Link from 'next/link';
 import { AttendeeJourneyModal } from './attendee-journey-modal';
 
@@ -580,6 +580,12 @@ export function HostStudio({
                           {att.email && <span className="truncate">{att.email}</span>}
                           {att.phone && <span>• {att.phone}</span>}
                         </div>
+                        {att.hasClickedCta && (
+                          <div className="mt-1 inline-flex items-center gap-1 bg-amber-500/10 text-amber-400 border border-amber-500/20 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase">
+                            <MousePointerClick className="w-3 h-3" />
+                            CTA Clicked
+                          </div>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2 shrink-0">

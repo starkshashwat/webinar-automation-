@@ -44,6 +44,22 @@ export async function GET(request: Request) {
 
     const list = attendanceList || [];
     
+    // 2. Fetch conversions for these attendees to see who clicked CTA
+    const allRegIds = list.map(item => item.registration_id);
+    let ctaClickSet = new Set<string>();
+    
+    if (allRegIds.length > 0) {
+      const { data: conversions } = await supabase
+        .from('webinar_conversions')
+        .select('registration_id')
+        .eq('event_type', 'CTA_CLICK')
+        .in('registration_id', allRegIds);
+        
+      if (conversions) {
+        conversions.forEach(c => ctaClickSet.add(c.registration_id));
+      }
+    }
+
     // Group uniquely by registration_id to prevent duplicate counting on page refreshes
     const uniqueAttendeesMap = new Map<string, any>();
 
@@ -62,7 +78,8 @@ export async function GET(request: Request) {
           joinedAt: item.joined_at,
           lastHeartbeatAt: item.last_heartbeat_at,
           watchTimeSeconds: item.watch_time_seconds || 0,
-          isActive: Boolean(isItemActive)
+          isActive: Boolean(isItemActive),
+          hasClickedCta: ctaClickSet.has(regId)
         });
       } else {
         const existing = uniqueAttendeesMap.get(regId);

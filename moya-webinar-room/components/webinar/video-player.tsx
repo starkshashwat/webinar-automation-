@@ -179,9 +179,9 @@ export function VideoPlayer({
       {/* Invisible overlay to prevent clicking/pausing the video (to enforce 'Live' illusion) */}
       <div className="absolute inset-0 z-10 bg-transparent" />
 
-      {/* Chat Overlay for Fullscreen or Mobile */}
-      {sessionId && status === 'LIVE' && !hideOverlay && (
-        <div className={`absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 pointer-events-auto ${isFullscreen ? 'h-[40%]' : 'h-[35%] lg:hidden'}`}>
+      {/* Chat Overlay ONLY for Fullscreen */}
+      {sessionId && status === 'LIVE' && !hideOverlay && isFullscreen && (
+        <div className="absolute bottom-0 left-0 right-0 z-40 transition-all duration-300 pointer-events-auto h-[40vh] md:h-[40%]">
           <ChatOverlay sessionId={sessionId} webinarId={webinarId} status={status} />
         </div>
       )}

@@ -310,15 +310,15 @@ export function WebinarRoom({
                 hideOverlay={!!activeBanner}
               />
               
-              {/* Click to Unmute Overlay */}
-              {isMuted && (
-                <div className="absolute inset-0 z-30 flex items-center justify-center pointer-events-none">
-                  <button 
+              {/* Unmute Overlay */}
+              {isMuted && session && session.status === 'LIVE' && (
+                <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                  <button
                     onClick={() => setIsMuted(false)}
-                    className="pointer-events-auto bg-blue-600/90 hover:bg-blue-500 text-white px-6 py-3 rounded-full font-semibold shadow-2xl flex items-center gap-3 backdrop-blur-sm border border-blue-500/50 transition-all hover:scale-105 animate-pulse"
+                    className="flex items-center gap-2 bg-red-600/90 hover:bg-red-500 text-white px-6 py-3 rounded-full font-black text-sm shadow-[0_0_30px_rgba(220,38,38,0.6)] transition-all hover:scale-105 active:scale-95 animate-bounce pointer-events-auto border border-red-400"
                   >
-                    <VolumeX className="w-5 h-5" />
-                    Click to Unmute Audio
+                    <VolumeX className="w-6 h-6" />
+                    TAP TO UNMUTE
                   </button>
                 </div>
               )}
