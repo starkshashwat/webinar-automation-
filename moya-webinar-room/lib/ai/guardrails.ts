@@ -50,15 +50,15 @@ export function applyGuardrails(input: GuardrailValidationInput): GuardrailValid
     finalMode = 'private';
   }
 
-  // Handle LOW confidence: Never hallucinate facts or make promises
+  // Handle LOW confidence: Silent by default (never hallucinate or guess)
   if (confidence === 'LOW') {
     return {
-      finalResponse: "I don't have enough information on that right now. Please reach out to our team directly or ask the host during Q&A.",
-      finalResponseMode: finalMode,
+      finalResponse: null,
+      finalResponseMode: 'no_response',
       confidence: 'LOW',
       isValid: true,
       sanitized: true,
-      reason: 'Low confidence fallback applied',
+      reason: 'Low confidence ignored (Silent by default)',
     };
   }
 
@@ -94,16 +94,19 @@ export function applyGuardrails(input: GuardrailValidationInput): GuardrailValid
     const isApproved = approvedUrls.some((appUrl) => cleanUrl.toLowerCase().includes(appUrl) || appUrl.includes(cleanUrl.toLowerCase()));
 
     if (!isApproved) {
-      // Remove or replace the hallucinated URL
+      // Remove or replace the hallucinated URL with valid course URL or matched resource
       if (matchedResourceUrl) {
         sanitizedText = sanitizedText.replace(url, matchedResourceUrl);
       } else if (webinar?.course_url) {
         sanitizedText = sanitizedText.replace(url, webinar.course_url);
       } else {
-        sanitizedText = sanitizedText.replace(url, '[link provided in webinar description]');
+        sanitizedText = sanitizedText.replace(url, '');
       }
     }
   }
+
+  // Clean up any remaining placeholder artifacts
+  sanitizedText = sanitizedText.replace(/\[(?:link provided in webinar description|link provided|link|url|current url|current webinar course url|payment link)\]/gi, webinar?.course_url || '');
 
   // 3. If matched resource URL is known and not yet present in text, append it cleanly
   if (matchedResourceUrl && !sanitizedText.includes(matchedResourceUrl)) {

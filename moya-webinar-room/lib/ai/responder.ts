@@ -134,7 +134,9 @@ export async function generateAIResponse({
     if (!isLive) {
       courseSalesLocked = true;
     } else {
-      const effectiveStart = webinar.scheduled_start
+      const effectiveStart = webinar.actual_start_at
+        ? new Date(webinar.actual_start_at).getTime()
+        : webinar.scheduled_start
         ? new Date(webinar.scheduled_start).getTime()
         : session?.started_at
         ? new Date(session.started_at).getTime()
@@ -150,24 +152,8 @@ export async function generateAIResponse({
     }
   }
 
-  const pitchRestriction = courseSalesLocked 
-    ? (settings.pre_pitch_prompt 
-        ? `\n> [!CRITICAL] PRE-PITCH RULES:\n> ${settings.pre_pitch_prompt}\n` 
-        : `
-> [!CRITICAL]
-> THE COURSE SALES INFORMATION IS CURRENTLY LOCKED. The pitch time has NOT been reached yet.
-> DO NOT reveal course pricing, URLs, specific modules, bonuses, or enrollment details under any circumstances.
-> If the attendee asks about the course, gracefully deflect them: "The detailed course information will be shared at the appropriate point in the webinar. Please stay with us for the full session." Do not provide any resources.
-`) 
-    : (settings.post_pitch_prompt
-        ? `\n> [!CRITICAL] POST-PITCH RULES:\n> ${settings.post_pitch_prompt}\n`
-        : '');
-
-  const ignoreRules = settings.ignore_rules
-    ? `\n# MESSAGE IGNORING RULES:\n${settings.ignore_rules}\nIf the message matches these ignore rules, set "response_mode" to "no_response" and "intent" to "ENGAGEMENT".\n`
-    : '';
-
-  let exactCourseUrl = webinar.course_url?.trim();
+  // Resolve the exact course URL from Webinar Settings (Single Source of Truth)
+  let exactCourseUrl = webinar.course_url?.trim() || '';
   if (!exactCourseUrl && webinar.ai_cta_broadcast_prompt) {
     const urlMatch = (webinar.ai_cta_broadcast_prompt as string).match(/(https?:\/\/[^\s]+)/i);
     if (urlMatch) {
@@ -175,37 +161,68 @@ export async function generateAIResponse({
     }
   }
 
+  const stageHeader = courseSalesLocked 
+    ? 'PRE-PITCH ACTIVE (Course details, pricing, discounts, and payment links are LOCKED)' 
+    : 'POST-PITCH ACTIVE (Course details, pricing, bonuses, and payment links are UNLOCKED)';
+
+  const pitchGuidance = courseSalesLocked
+    ? (settings.pre_pitch_prompt 
+        ? `\n# ACTIVE PRE-PITCH INSTRUCTIONS (FROM ADMIN SETTINGS):\n${settings.pre_pitch_prompt}\n` 
+        : `\n# ACTIVE PRE-PITCH INSTRUCTIONS:\n- Course information, pricing, discounts, and payment links are STRICTLY LOCKED.\n- If attendee asks about course purchase, fees, bonuses, or links, gracefully deflect them or stay silent.\n- If attendee asks a genuine non-course question about the webinar topic that is answered in the Approved Knowledge Base, you MAY answer using the Knowledge Base.\n`)
+    : (settings.post_pitch_prompt
+        ? `\n# ACTIVE POST-PITCH INSTRUCTIONS (FROM ADMIN SETTINGS):\n${settings.post_pitch_prompt}\n`
+        : `\n# ACTIVE POST-PITCH INSTRUCTIONS:\n- Course information, pricing, bonuses, and enrollment are UNLOCKED.\n- Answer attendee questions using the Approved Knowledge Base and provide the official course link: "${exactCourseUrl}".\n`);
+
+  const ignoreRulesSection = settings.ignore_rules
+    ? `\n# STEP 1 — IGNORE RULES EVALUATION (FROM ADMIN SETTINGS):\n${settings.ignore_rules}\n`
+    : '';
+
   const systemInstruction = `
-${settings.system_instructions}
+${settings.system_instructions || 'You are the official AI webinar host.'}
 
-# WEBINAR CONTEXT:
+# CURRENT WEBINAR STATUS:
 - Title: "${webinar.title}"
-- Description: "${webinar.description || 'Live Masterclass'}"
-- Course/Main URL: "${exactCourseUrl || ''}"
+- Stream Stage: ${stageHeader}
+- Official Course / Payment URL: "${exactCourseUrl || '(No URL configured)'}"
 ${hostContext}
-${pitchRestriction}
-${ignoreRules}
+${ignoreRulesSection}
+${pitchGuidance}
 
-# APPROVED KNOWLEDGE BASE:
-${courseSalesLocked ? '(Course knowledge is currently locked. Answer only general webinar questions.)' : kbFormatted}
+# APPROVED KNOWLEDGE BASE (SINGLE FACTUAL SOURCE OF TRUTH):
+${kbFormatted}
 
-# APPROVED RESOURCES & LINKS (YOU MUST NEVER FABRICATE ANY LINK OUTSIDE THIS LIST):
-${courseSalesLocked ? '(Resources are currently locked)' : resourcesFormatted}
+# APPROVED RESOURCES & LINKS (NEVER FABRICATE LINKS OUTSIDE THIS LIST):
+${resourcesFormatted}
 
-# RULES FOR LIVE WEBINAR OPERATION:
-1. You are a silent-by-default operator running behind the scenes.
-2. The system must prefer false negatives over false positives. If there is uncertainty about whether a message is a genuine attendee question/problem, set "response_mode" to "no_response".
-3. ONLY answer based on the knowledge provided above. NEVER invent facts, prices, promises, or external URLs.
-4. Do not respond merely because the message contains a question mark.
-5. Do not respond to engagement activities (e.g., "1", "yes", "Delhi" when asked for location). Evaluate the attendee's message against the recent host context.
-6. Do not respond to host prompts, audience answers to host prompts, reactions, or channel sharing.
-7. Only respond when the attendee clearly requires information, assistance, or an approved resource.
-8. Set "intent" to one of: GENUINE_QUESTION, PROBLEM, RESOURCE_REQUEST, ENGAGEMENT, REACTION, CHANNEL_SHARE, CASUAL, UNCLEAR, HOST_MESSAGE.
-9. If intent is GENUINE_QUESTION, PROBLEM, or RESOURCE_REQUEST, set "response_mode" to "private".
-10. For ALL OTHER INTENTS, set "response_mode" to "no_response" and "response" to null.
-11. Whenever you provide a URL or link in your response, you MUST output the raw, literal URL (e.g., https://example.com). Do NOT use placeholders like "[link]" or "click here".
-12. LANGUAGE RULE: Attendees often speak in "Hinglish" (Hindi written in English alphabet, e.g., "Course kab milega", "Kaise join karu"). You MUST understand Hinglish. DO NOT output a translation of their question. You must actually ANSWER their question professionally in the same language they used (or English), based strictly on the knowledge base.
-13. If you do not know the answer, do not translate the prompt. Simply set "response_mode" to "no_response".
+# CRITICAL 3-STEP DECISION PIPELINE:
+
+STEP 1: IGNORE CLASSIFICATION
+- First, evaluate the latest attendee message strictly against the "IGNORE RULES" above.
+- If the message matches ANY ignore criteria (e.g., poll responses, greetings, thank yous, generic open-ended queries, duplicate messages, spam):
+  → You MUST set "intent": "ENGAGEMENT", "response_mode": "no_response", "response": null.
+
+STEP 2: PITCH STATE & TOPIC CHECK
+- If the message passed Step 1 (genuine attendee query):
+  - In PRE-PITCH (${courseSalesLocked}):
+    * If attendee asks about course purchase, course price, fees, enrollment, discount, or payment link:
+      Follow the Pre-Pitch instructions (Course details are locked. Deflect gracefully or return "no_response"). NEVER provide course price or course URL.
+    * If attendee asks a genuine non-course question about the webinar topic: Proceed to Step 3.
+  - In POST-PITCH (${!courseSalesLocked}):
+    * Follow Post-Pitch instructions. Course details and payment link are unlocked.
+
+STEP 3: KNOWLEDGE BASE GATING (ZERO HALLUCINATION RULE)
+- Search the "APPROVED KNOWLEDGE BASE" above for factual information to answer the question.
+- IF THE INFORMATION IS NOT IN THE APPROVED KNOWLEDGE BASE:
+  → DO NOT invent or make up facts.
+  → DO NOT say "refer to webinar description", "check email", or fabricate external links.
+  → Set "response_mode": "no_response", "response": null.
+- IF FACTUAL INFORMATION EXISTS IN KNOWLEDGE BASE:
+  → Set "intent": "GENUINE_QUESTION" (or "PROBLEM" or "RESOURCE_REQUEST").
+  → Set "response_mode": "private".
+  → Generate a direct, helpful, natural answer matching the attendee's language (Hindi / Hinglish / English).
+  → For Course Links: Use ONLY the exact URL: "${exactCourseUrl}".
+  → For Support/Other Resources: Use ONLY the URLs listed in APPROVED RESOURCES.
+  → NEVER output translation of attendee message. Give the actual helpful answer.
 `;
 
   const userPrompt = `
@@ -249,8 +266,11 @@ Please evaluate this message and output a valid JSON object with this EXACT sche
   }
 }
 
+/**
+ * Generates an on-the-fly proactive AI CTA promotional broadcast message.
+ */
 export async function generateAIBroadcastCTA(
-  webinar: any, 
+  webinar: any,
   settings: AISettings,
   knowledge: AIKnowledge[],
   resources: AIResource[],
@@ -266,19 +286,13 @@ export async function generateAIBroadcastCTA(
     ? resources.map((r) => `- Resource ID: "${r.id}" | Name: "${r.name}" | Description: "${r.description || ''}" | URL: "${r.url}"`).join('\n')
     : '(No approved resources configured)';
 
-  // Resolve the exact payment/course URL:
-  // 1. Dedicated webinar.course_url
-  // 2. URL embedded in webinar.ai_cta_broadcast_prompt
-  // 3. Fallback
-  let exactCourseUrl = webinar.course_url?.trim();
+  // Resolve the exact payment/course URL strictly from Webinar Settings:
+  let exactCourseUrl = webinar.course_url?.trim() || '';
   if (!exactCourseUrl && webinar.ai_cta_broadcast_prompt) {
     const urlMatch = (webinar.ai_cta_broadcast_prompt as string).match(/(https?:\/\/[^\s]+)/i);
     if (urlMatch) {
       exactCourseUrl = urlMatch[0].replace(/[),.;]+$/, '');
     }
-  }
-  if (!exactCourseUrl) {
-    exactCourseUrl = 'https://moya.com/checkout';
   }
 
   const customPrompt = webinar.ai_cta_broadcast_prompt 
@@ -294,8 +308,7 @@ You are the official webinar assistant/host for "${webinar.title}".
 Your task is to craft a short, engaging, and high-converting Call-To-Action (CTA) promotional message to broadcast into the live webinar public chat.
 
 CRITICAL LINK REQUIREMENT:
-You MUST include the exact literal payment/course URL: ${exactCourseUrl}
-Do NOT replace this URL with placeholders like "[link provided]", "[link]", or "click here". Output the actual URL.
+${exactCourseUrl ? `You MUST include the exact literal payment/course URL: ${exactCourseUrl}\nDo NOT replace this URL with placeholders like "[link provided in webinar description]" or "[link]". Output the actual URL.` : 'Do not invent any link.'}
 
 ${customPrompt}
 ${anglePrompt}
@@ -306,10 +319,11 @@ ${kbFormatted}
 ${resourcesFormatted}
 
 GUIDELINES:
-1. Make the message compelling, natural, and urgent.
+1. Make the message compelling, natural, and persuasive.
 2. Highlight specific bonuses, results, value, or scarcity from the instructions.
-3. Keep the message concise (1-3 short paragraphs max).
-4. End with the exact URL: ${exactCourseUrl}
+3. Keep the message concise (3-8 short lines).
+4. Ground every claim strictly in the Knowledge Source. NEVER invent prices, fake promises, or unverified claims.
+${exactCourseUrl ? `5. If providing a link, include the exact URL: ${exactCourseUrl}` : ''}
 `;
 
   const userPrompt = `
@@ -346,16 +360,24 @@ Please generate the promotional CTA message and output a valid JSON object with 
 
     if (result.status === 'processed' && result.response) {
       let finalStr = result.response;
-      if (!finalStr.includes(exactCourseUrl)) {
-        finalStr += `\n\n👉 ${exactCourseUrl}`;
+      // Clean up any hallucinated placeholder text with the actual course URL
+      if (exactCourseUrl) {
+        finalStr = finalStr.replace(/\[(?:link provided in webinar description|link provided|link|url|current url|current webinar course url|payment link)\]/gi, exactCourseUrl);
+        if (!finalStr.includes(exactCourseUrl)) {
+          finalStr += `\n\n👉 ${exactCourseUrl}`;
+        }
       }
       return finalStr;
     }
 
-    console.warn('[AI Responder] LLM generation failed or key missing (' + (result.errorMessage || 'unknown') + '), using resilient fallback CTA.');
-    return `🚨 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity. Click the link below to get instant access:\n\n👉 ${exactCourseUrl}`;
+    console.warn('[AI Responder] LLM generation failed (' + (result.errorMessage || 'unknown') + '), using fallback CTA.');
+    return exactCourseUrl 
+      ? `🚀 Special Webinar Offer is now LIVE!\n\nClick the link below to get instant access:\n\n👉 ${exactCourseUrl}`
+      : `🚀 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity!`;
   } catch (error) {
     console.error('[AI Responder] Failed to generate broadcast CTA:', error);
-    return `🚨 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity. Click the link below to get instant access:\n\n👉 ${exactCourseUrl}`;
+    return exactCourseUrl 
+      ? `🚀 Special Webinar Offer is now LIVE!\n\nClick the link below to get instant access:\n\n👉 ${exactCourseUrl}`
+      : `🚀 Special Webinar Offer is now LIVE!\n\nDon't miss out on this exclusive opportunity!`;
   }
 }
