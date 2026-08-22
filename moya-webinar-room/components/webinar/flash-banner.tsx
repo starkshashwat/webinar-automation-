@@ -9,12 +9,16 @@ export function FlashBanner({
   message, 
   onClose, 
   onClaimOffer,
-  mode = 'overlay'
+  mode = 'overlay',
+  webinarId,
+  attendeeId
 }: { 
   message: ChatMessage; 
   onClose: () => void; 
   onClaimOffer?: () => void;
   mode?: 'overlay' | 'sidebar';
+  webinarId?: string;
+  attendeeId?: string | null;
 }) {
   const [isVisible, setIsVisible] = useState(false);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
@@ -58,19 +62,19 @@ export function FlashBanner({
     setTimeout(onClose, 300);
   };
 
-  const handleClaim = () => {
-    trackCtaClick();
-    if (onClaimOffer) {
-      onClaimOffer();
-    }
-    handleClose();
-  };
-
   // Find URL in text to strip it from the display, but prefer metadata.courseUrl for the button
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = message.message.match(urlRegex) || [];
   const primaryUrl = metadata.courseUrl || urls[0];
   const textWithoutUrl = message.message.replace(urlRegex, '').trim();
+
+  const handleClaim = () => {
+    trackCtaClick(webinarId, attendeeId || undefined, primaryUrl);
+    if (onClaimOffer) {
+      onClaimOffer();
+    }
+    handleClose();
+  };
 
   const activeImage = resolvedImages.length > 0 ? resolvedImages[currentImageIndex] : null;
 

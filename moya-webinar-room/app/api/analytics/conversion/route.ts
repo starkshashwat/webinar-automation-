@@ -9,11 +9,35 @@ export async function POST(request: Request) {
   const cookieStore = await cookies();
 
   try {
-    const body = await request.json().catch(() => ({}));
+    let body: any = {};
+    const text = await request.text().catch(() => '');
+    if (text) {
+      try {
+        body = JSON.parse(text);
+      } catch {
+        body = {};
+      }
+    }
+
     let registrationId = body.registration_id;
 
     if (!registrationId) {
       registrationId = cookieStore.get('moya_attendee_session')?.value;
+    }
+
+    if (!registrationId && body.webinar_id) {
+      // Fallback: lookup registration by webinar_id if single attendee
+      const { data: latestReg } = await supabase
+        .from('webinar_registrations')
+        .select('id')
+        .eq('webinar_id', body.webinar_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (latestReg) {
+        registrationId = latestReg.id;
+      }
     }
 
     if (!registrationId) {
@@ -28,7 +52,8 @@ export async function POST(request: Request) {
       .insert([{
         registration_id: registrationId,
         event_type: eventType,
-        value: value
+        value: value,
+        timestamp: body.timestamp || new Date().toISOString()
       }]);
 
     if (error) {

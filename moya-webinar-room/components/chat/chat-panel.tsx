@@ -284,6 +284,8 @@ export function ChatPanel({
                   isAdmin={isAdmin} 
                   isNew={isAdmin && newMsgIds.has(msg.id)}
                   onDismissNew={() => dismissNew(msg.id)}
+                  webinarId={webinarId}
+                  attendeeId={attendeeId}
                 />
                 
                 {/* 1-Click Private Reply Button for Admin */}

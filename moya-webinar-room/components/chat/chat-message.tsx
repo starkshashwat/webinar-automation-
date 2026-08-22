@@ -2,7 +2,7 @@ import { type ChatMessage } from '@/types/chat';
 import { Bot, Crown, Rocket, Lock } from 'lucide-react';
 import { trackCtaClick } from '@/lib/analytics/tracker';
 
-const renderMessageWithLinks = (text: string) => {
+const renderMessageWithLinks = (text: string, webinarId?: string, attendeeId?: string | null) => {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const parts = text.split(urlRegex);
   return parts.map((part, i) => {
@@ -16,7 +16,7 @@ const renderMessageWithLinks = (text: string) => {
           className="text-cyan-400 hover:text-cyan-300 underline font-semibold transition-colors break-all inline"
           onClick={(e) => {
             e.stopPropagation();
-            trackCtaClick();
+            trackCtaClick(webinarId, attendeeId || undefined, part);
           }}
         >
           {part}
@@ -31,12 +31,16 @@ export function ChatMessageItem({
   message, 
   isAdmin = false,
   isNew = false,
-  onDismissNew
+  onDismissNew,
+  webinarId,
+  attendeeId
 }: { 
   message: ChatMessage;
   isAdmin?: boolean;
   isNew?: boolean;
   onDismissNew?: () => void;
+  webinarId?: string;
+  attendeeId?: string | null;
 }) {
   const isAI = message.message_type === 'AI';
   const isHost = message.message_type === 'HOST';
@@ -81,7 +85,7 @@ export function ChatMessageItem({
           </span>
         </div>
         <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100 font-medium">
-          {renderMessageWithLinks(message.message)}
+          {renderMessageWithLinks(message.message, webinarId, attendeeId)}
         </p>
       </div>
     );
@@ -117,7 +121,7 @@ export function ChatMessageItem({
           </span>
         </div>
         <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100">
-          {renderMessageWithLinks(message.message)}
+          {renderMessageWithLinks(message.message, webinarId, attendeeId)}
         </p>
       </div>
     );
@@ -150,7 +154,7 @@ export function ChatMessageItem({
           </span>
         </div>
         <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-100 font-normal">
-          {renderMessageWithLinks(message.message)}
+          {renderMessageWithLinks(message.message, webinarId, attendeeId)}
         </p>
       </div>
     );
@@ -175,7 +179,7 @@ export function ChatMessageItem({
         </span>
       </div>
       <p className="text-sm whitespace-pre-wrap break-words leading-relaxed text-zinc-200">
-        {renderMessageWithLinks(message.message)}
+        {renderMessageWithLinks(message.message, webinarId, attendeeId)}
       </p>
     </div>
   );

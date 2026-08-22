@@ -332,6 +332,8 @@ export function WebinarRoom({
                   message={activeBanner} 
                   onClose={() => setActiveBanner(null)}
                   onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
+                  webinarId={webinar.id}
+                  attendeeId={attendee?.id || null}
                 />
               )}
             </div>
@@ -356,6 +358,8 @@ export function WebinarRoom({
                 message={activeBanner} 
                 onClose={() => setActiveBanner(null)}
                 onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
+                webinarId={webinar.id}
+                attendeeId={attendee?.id || null}
               />
             ) : session ? (
               <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} />
