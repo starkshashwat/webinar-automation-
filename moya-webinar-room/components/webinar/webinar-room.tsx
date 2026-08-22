@@ -24,6 +24,7 @@ export function WebinarRoom({
   const [branding, setBranding] = useState<{ logo_url?: string | null; favicon_url?: string | null; brand_name?: string | null }>({
     brand_name: 'MOYA'
   });
+  const [attendeeId, setAttendeeId] = useState<string | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -55,8 +56,10 @@ export function WebinarRoom({
   
   // Analytics Join Effect & Session ID Cache
   useEffect(() => {
-    if (!session?.id) return;
     const regId = localStorage.getItem(`moya_attendee_${webinar.id}`);
+    if (regId) setAttendeeId(regId);
+    
+    if (!session?.id) return;
     if (!regId) return;
 
     // Fast-recover cached attendanceSessionId from localStorage
@@ -333,7 +336,7 @@ export function WebinarRoom({
                   onClose={() => setActiveBanner(null)}
                   onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
                   webinarId={webinar.id}
-                  attendeeId={attendee?.id || null}
+                  attendeeId={attendeeId}
                 />
               )}
             </div>
@@ -359,10 +362,10 @@ export function WebinarRoom({
                 onClose={() => setActiveBanner(null)}
                 onClaimOffer={() => window.dispatchEvent(new CustomEvent('requestPiP'))}
                 webinarId={webinar.id}
-                attendeeId={attendee?.id || null}
+                attendeeId={attendeeId}
               />
             ) : session ? (
-              <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} />
+              <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} attendeeId={attendeeId} />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-zinc-600 text-sm">
                 Chat will be available when the session starts
