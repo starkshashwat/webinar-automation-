@@ -42,7 +42,14 @@ export async function processAIBroadcasts() {
         const isWebinarLive = webinar?.status === 'LIVE' || webinar?.status === 'live';
         const isSessionLive = session?.status === 'LIVE' || session?.status === 'live';
         if (!isWebinarLive || !isSessionLive) {
-          // If webinar is NOT live, NEVER send any broadcast!
+          // If webinar or session has ENDED, CANCEL all pending queue items immediately
+          if (webinar?.status === 'ENDED' || session?.status === 'ENDED') {
+            await supabase
+              .from('webinar_broadcast_queue')
+              .update({ status: 'CANCELLED', updated_at: nowIso })
+              .eq('session_id', sessionId)
+              .eq('status', 'PENDING');
+          }
           continue;
         }
 
@@ -56,7 +63,7 @@ export async function processAIBroadcasts() {
           continue;
         }
 
-        // STRICT CHECK 3: Has the exact unlock time been reached?
+        // STRICT CHECK 3: Has the webinar exceeded its total duration?
         const effectiveStart = webinar?.actual_start_at
           ? new Date(webinar.actual_start_at).getTime()
           : webinar?.scheduled_start 
@@ -67,6 +74,18 @@ export async function processAIBroadcasts() {
           ? new Date(webinar.started_at).getTime()
           : 0;
 
+        const durationMs = ((webinar?.recording_duration || webinar?.duration_minutes || 60) * 60 * 1000) + ((webinar?.duration_seconds || 0) * 1000);
+        if (effectiveStart > 0 && now.getTime() >= effectiveStart + durationMs) {
+          // Webinar duration has ended. Cancel all pending broadcasts and stop immediately
+          await supabase
+            .from('webinar_broadcast_queue')
+            .update({ status: 'CANCELLED', updated_at: nowIso })
+            .eq('session_id', sessionId)
+            .eq('status', 'PENDING');
+          continue;
+        }
+
+        // STRICT CHECK 4: Has the exact unlock time been reached?
         const pitchDelayMinsMs = (webinar?.course_pitch_delay_minutes || 0) * 60000;
         const pitchDelaySecsMs = (webinar?.course_pitch_delay_seconds || 0) * 1000;
         const unlockTime = effectiveStart + pitchDelayMinsMs + pitchDelaySecsMs;

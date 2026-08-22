@@ -111,6 +111,13 @@ export async function checkAndStartScheduledWebinars(): Promise<{
             .eq('id', webinar.id);
         }
 
+        // Cancel all pending broadcast queue items
+        await supabase
+          .from('webinar_broadcast_queue')
+          .update({ status: 'CANCELLED', updated_at: nowIso })
+          .eq('webinar_id', webinar.id)
+          .eq('status', 'PENDING');
+
         endedCount++;
       }
     }
