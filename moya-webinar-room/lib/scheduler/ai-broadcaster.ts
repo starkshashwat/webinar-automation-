@@ -175,7 +175,7 @@ export async function processAIBroadcasts() {
             if (claimError || !claimed) continue;
 
             let finalMessage = b.message;
-            if (finalMessage === '[PENDING_GENERATION]') {
+            if (finalMessage === '[PENDING_GENERATION]' || finalMessage === '[PROCESSING_GENERATION]') {
               try {
                 const knowledge = await getActiveKnowledge(webinar.id);
                 const resources = await getActiveResources(webinar.id);
@@ -191,7 +191,7 @@ export async function processAIBroadcasts() {
                 console.error('[AI Broadcaster] On-the-fly generation failed:', err);
                 await supabase
                   .from('webinar_broadcast_queue')
-                  .update({ message: b.message, status: 'PENDING', updated_at: nowIso })
+                  .update({ message: '[PENDING_GENERATION]', status: 'PENDING', updated_at: nowIso })
                   .eq('id', b.id);
                 continue;
               }
