@@ -193,6 +193,8 @@ ${courseSalesLocked ? '(Resources are currently locked)' : resourcesFormatted}
 9. If intent is GENUINE_QUESTION, PROBLEM, or RESOURCE_REQUEST, set "response_mode" to "private".
 10. For ALL OTHER INTENTS, set "response_mode" to "no_response" and "response" to null.
 11. Whenever you provide a URL or link in your response, you MUST output the raw, literal URL (e.g., https://example.com). Do NOT use placeholders like "[link]" or "click here".
+12. LANGUAGE RULE: Attendees often speak in "Hinglish" (Hindi written in English alphabet, e.g., "Course kab milega", "Kaise join karu"). You MUST understand Hinglish. DO NOT output a translation of their question. You must actually ANSWER their question professionally in the same language they used (or English), based strictly on the knowledge base.
+13. If you do not know the answer, do not translate the prompt. Simply set "response_mode" to "no_response".
 `;
 
   const userPrompt = `
