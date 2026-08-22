@@ -108,7 +108,9 @@ export function BroadcastControl({
         return;
       }
 
-      const effectiveStart = webinar.scheduled_start
+      const effectiveStart = webinar.actual_start_at
+        ? new Date(webinar.actual_start_at).getTime()
+        : webinar.scheduled_start
         ? new Date(webinar.scheduled_start).getTime()
         : session?.started_at
         ? new Date(session.started_at).getTime()

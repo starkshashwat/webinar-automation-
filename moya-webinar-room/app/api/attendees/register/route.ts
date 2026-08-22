@@ -35,15 +35,20 @@ export async function POST(request: Request) {
     if (!session) {
       const { data: w } = await adminSupabase
         .from('webinars')
-        .select('status')
+        .select('status, scheduled_start')
         .eq('id', webinar_id)
         .single();
 
       const sessionStatus = (w?.status === 'LIVE' || w?.status === 'live') ? 'LIVE' : 'WAITING';
+      const sessionStartedAt = sessionStatus === 'LIVE' ? new Date().toISOString() : (w?.scheduled_start || null);
 
       const { data: newSession, error: sessionError } = await adminSupabase
         .from('webinar_sessions')
-        .insert([{ webinar_id, status: sessionStatus }])
+        .insert([{ 
+          webinar_id, 
+          status: sessionStatus,
+          started_at: sessionStartedAt
+        }])
         .select('id, status')
         .single();
         

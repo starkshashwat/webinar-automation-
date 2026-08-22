@@ -27,13 +27,23 @@ export class SupabaseWebinarProvider implements WebinarProvider {
   async startWebinar(webinarId: string): Promise<void> {
     const now = new Date().toISOString();
     
+    // Fetch webinar to check scheduled_start
+    const { data: webinar } = await this.supabase
+      .from('webinars')
+      .select('scheduled_start')
+      .eq('id', webinarId)
+      .single();
+
+    // Prioritize scheduled_start if available, else current timestamp
+    const startTimestamp = webinar?.scheduled_start || now;
+
     // Update webinar status to LIVE
     await this.supabase
       .from('webinars')
       .update({
         status: 'LIVE',
-        started_at: now,
-        actual_start_at: now,
+        started_at: startTimestamp,
+        actual_start_at: startTimestamp,
         updated_at: now,
       })
       .eq('id', webinarId);
@@ -52,8 +62,8 @@ export class SupabaseWebinarProvider implements WebinarProvider {
         .from('webinar_sessions')
         .update({
           status: 'LIVE',
-          started_at: now,
-          actual_start_at: now
+          started_at: startTimestamp,
+          actual_start_at: startTimestamp
         })
         .eq('id', existingSession.id);
     } else {
@@ -61,11 +71,18 @@ export class SupabaseWebinarProvider implements WebinarProvider {
         .from('webinar_sessions')
         .insert([{
           webinar_id: webinarId,
-          started_at: now,
-          actual_start_at: now,
+          started_at: startTimestamp,
+          actual_start_at: startTimestamp,
           status: 'LIVE'
         }]);
     }
+
+    // Clean up any premature/stale pre-generated broadcast queue items so they regenerate with the exact start time
+    await this.supabase
+      .from('webinar_broadcast_queue')
+      .delete()
+      .eq('webinar_id', webinarId)
+      .eq('status', 'PENDING');
   }
 
   async endWebinar(webinarId: string): Promise<void> {

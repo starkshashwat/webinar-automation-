@@ -57,7 +57,9 @@ export async function processAIBroadcasts() {
         }
 
         // STRICT CHECK 3: Has the exact unlock time been reached?
-        const effectiveStart = webinar?.scheduled_start 
+        const effectiveStart = webinar?.actual_start_at
+          ? new Date(webinar.actual_start_at).getTime()
+          : webinar?.scheduled_start 
           ? new Date(webinar.scheduled_start).getTime()
           : session?.started_at 
           ? new Date(session.started_at).getTime()
@@ -228,8 +230,12 @@ export async function processAIBroadcasts() {
       for (const session of activeSessions) {
         const webinar = session.webinars as any;
         
-        // STRICT: Both session AND webinar must be LIVE
+        // STRICT 1: Both session AND webinar must be LIVE
         if (!webinar || (webinar.status !== 'LIVE' && webinar.status !== 'live')) {
+          continue;
+        }
+        // STRICT 2: Scheduled start must not be in the future
+        if (webinar.scheduled_start && new Date(webinar.scheduled_start).getTime() > Date.now()) {
           continue;
         }
         if (webinar.ai_enabled === false || webinar.course_pitch_enabled === false) {
@@ -288,6 +294,12 @@ async function preGenerateAIBroadcasts(sessionId: string) {
     return;
   }
 
+  // Do not pre-generate if scheduled_start is in future
+  if (webinar.scheduled_start && new Date(webinar.scheduled_start).getTime() > Date.now()) {
+    console.log(`[AI Broadcaster] Skipping pre-generation for session ${sessionId}: scheduled_start is in the future`);
+    return;
+  }
+
   const settings = await getAISettings();
   if (settings.is_enabled_globally === false) return;
 
@@ -302,7 +314,9 @@ async function preGenerateAIBroadcasts(sessionId: string) {
     return;
   }
 
-  const effectiveStart = webinar.scheduled_start 
+  const effectiveStart = webinar.actual_start_at
+    ? new Date(webinar.actual_start_at).getTime()
+    : webinar.scheduled_start 
     ? new Date(webinar.scheduled_start).getTime()
     : session.started_at 
     ? new Date(session.started_at).getTime()

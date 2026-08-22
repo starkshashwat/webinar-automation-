@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       // Check if session_id passed was actually a webinar_id
       const { data: webinar } = await adminSupabase
         .from('webinars')
-        .select('id, status')
+        .select('id, status, scheduled_start')
         .eq('id', session_id)
         .maybeSingle();
 
@@ -72,9 +72,14 @@ export async function POST(request: Request) {
         validSessionId = foundSession.id;
       } else {
         const sessionStatus = (webinar?.status === 'LIVE' || webinar?.status === 'live') ? 'LIVE' : 'WAITING';
+        const sessionStartedAt = sessionStatus === 'LIVE' ? new Date().toISOString() : (webinar?.scheduled_start || null);
         const { data: newSession, error: createSessionErr } = await adminSupabase
           .from('webinar_sessions')
-          .insert([{ webinar_id: targetWebinarId, status: sessionStatus }])
+          .insert([{ 
+            webinar_id: targetWebinarId, 
+            status: sessionStatus,
+            started_at: sessionStartedAt
+          }])
           .select('id')
           .single();
 
