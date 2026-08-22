@@ -133,11 +133,18 @@ export function HostStudio({
       } else if (now >= startTime && now < endTime) {
         if ((status as string) !== 'LIVE') {
           setStatus('LIVE');
-          fetch('/api/cron/webinar-scheduler', { method: 'POST' }).catch(() => {});
+        }
+        // Ping cron frequently when LIVE to ensure AI & Auto-end runs even without Vercel Cron
+        if (Math.random() < 0.1) { // 10% chance every second = approx every 10 seconds
+          fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
         }
         setCountdown(null);
       } else if (now >= endTime) {
-        setStatus('ENDED');
+        if ((status as string) !== 'ENDED') {
+          setStatus('ENDED');
+          // Trigger the server to end it right now
+          fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
+        }
         setCountdown(null);
       }
     };

@@ -178,6 +178,11 @@ export function WebinarRoom({
 
     // Fast 10-second heartbeat for analytics
     const heartbeatInterval = setInterval(() => {
+      // Small probability to ping the scheduler to trigger auto-end (so we don't DDoS the server)
+      if (Math.random() < 0.05) {
+        fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
+      }
+
       if (!attendanceSessionId) return;
       const now = new Date().getTime();
       const diffSeconds = Math.max(0, (now - startTime) / 1000);

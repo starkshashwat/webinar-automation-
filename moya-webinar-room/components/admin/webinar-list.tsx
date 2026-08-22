@@ -183,7 +183,7 @@ export function WebinarList({ initialWebinars }: { initialWebinars: any[] }) {
                   <td className="p-4 text-right space-x-2 flex items-center justify-end">
                     {isEnded ? (
                       <Link
-                        href={`/admin/webinars/${w.id}`}
+                        href={`/admin/webinars/${w.id}/report`}
                         className="inline-flex items-center gap-1 text-xs font-bold text-purple-400 hover:text-purple-300 px-3 py-1.5 rounded-lg bg-purple-500/10 hover:bg-purple-500/20 border border-purple-500/20 transition-colors"
                       >
                         <BarChart3 className="w-3.5 h-3.5" />

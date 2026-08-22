@@ -141,12 +141,21 @@ export default function AdminDashboardPage() {
                       }`}>
                         {w.status}
                       </span>
-                      <Link
-                        href={`/admin/webinars/${w.id}`}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
-                      >
-                        Host Room
-                      </Link>
+                      {w.status === 'ENDED' ? (
+                        <Link
+                          href={`/admin/webinars/${w.id}/report`}
+                          className="bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/30 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          View Report
+                        </Link>
+                      ) : (
+                        <Link
+                          href={`/admin/webinars/${w.id}`}
+                          className="bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors"
+                        >
+                          Host Room
+                        </Link>
+                      )}
                     </div>
                   </div>
                 ))}

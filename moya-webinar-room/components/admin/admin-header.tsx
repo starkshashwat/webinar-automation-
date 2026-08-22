@@ -28,7 +28,7 @@ export function AdminHeader() {
       .then(data => {
         const logo = data.primaryDomain?.logo_url || data.platformSettings?.logo_url;
         const favicon = data.primaryDomain?.favicon_url || data.platformSettings?.favicon_url;
-        const name = data.platformSettings?.brand_name || 'MOYA ADMIN';
+        const name = data.platformSettings?.brand_name ?? 'Admin';
         setBranding({ logo_url: logo, favicon_url: favicon, brand_name: name });
 
         // Update document favicon dynamically
@@ -77,7 +77,7 @@ export function AdminHeader() {
             </div>
           )}
           <span className="text-lg font-bold text-white tracking-wider">
-            {branding.brand_name || 'MOYA ADMIN'}
+            {branding.brand_name}
           </span>
         </Link>
 

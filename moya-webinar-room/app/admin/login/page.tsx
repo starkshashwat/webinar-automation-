@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { login } from './actions';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,18 @@ import { Label } from '@/components/ui/label';
 export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [brandName, setBrandName] = useState('Admin Login');
+
+  useEffect(() => {
+    fetch('/api/settings/domain')
+      .then(res => res.json())
+      .then(data => {
+        if (data.platformSettings?.brand_name !== undefined) {
+          setBrandName(data.platformSettings.brand_name || 'Admin Login');
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   async function handleSubmit(formData: FormData) {
     setLoading(true);
@@ -25,7 +37,7 @@ export default function LoginPage() {
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="text-2xl">MOYA Admin</CardTitle>
+          <CardTitle className="text-2xl">{brandName}</CardTitle>
           <CardDescription>Enter your email and password to access the dashboard.</CardDescription>
         </CardHeader>
         <form action={handleSubmit}>
