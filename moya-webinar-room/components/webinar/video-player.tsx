@@ -98,14 +98,28 @@ export function VideoPlayer({
           }
         }
 
-        const drift = Math.abs(video.currentTime - targetTime);
+        const drift = targetTime - video.currentTime;
+        const absDrift = Math.abs(drift);
 
-        // If drift is greater than 1 second, force resync (tighter real-time feel)
-        if (drift > 1) {
+        // If drift is massive (e.g. > 4 seconds) due to buffering/pausing, force a hard jump
+        if (absDrift > 4) {
           video.currentTime = targetTime;
+          video.playbackRate = 1.0;
+        } 
+        // If falling behind slightly (0.5s to 4s), speed up smoothly
+        else if (drift > 0.5) {
+          video.playbackRate = 1.15; // 15% faster to catch up
+        } 
+        // If ahead slightly (e.g. > 0.5s), slow down smoothly
+        else if (drift < -0.5) {
+          video.playbackRate = 0.85; // 15% slower to let server catch up
+        } 
+        // In perfect sync
+        else {
+          video.playbackRate = 1.0;
         }
 
-        // Enforce playing state if it was paused
+        // Enforce playing state if it was paused (and not at the end)
         if (video.paused && targetTime < video.duration) {
           video.play().catch(e => console.error('Auto-play prevented:', e));
         }

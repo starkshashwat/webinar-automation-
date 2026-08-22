@@ -95,6 +95,29 @@ export async function processAIBroadcasts() {
 
             if (claimError || !claimed) continue;
 
+            let finalMessage = b.message;
+            if (finalMessage === '[PENDING_GENERATION]') {
+              try {
+                const knowledge = await getActiveKnowledge(webinar.id);
+                const resources = await getActiveResources(webinar.id);
+                const angles = [
+                  'Focus on program reveal, main value proposition, and why attendees should act now.',
+                  'Focus on student success proof, transformations, and tangible results.',
+                  'Focus on fast-action scarcity, exclusive bonuses, and final opportunity to enroll.'
+                ];
+                const angle = angles[processedCount % angles.length];
+                finalMessage = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle) || 'Don\'t miss out on this offer!';
+              } catch (err) {
+                console.error('[AI Broadcaster] On-the-fly generation failed:', err);
+                // Reschedule for next tick to try again, or fallback
+                await supabase
+                  .from('webinar_broadcast_queue')
+                  .update({ status: 'PENDING', updated_at: nowIso })
+                  .eq('id', b.id);
+                continue; // Skip insertion for now
+              }
+            }
+
             const metadata = {
               type: b.display_type || 'CHAT',
               imageUrl: b.image_url || null,
@@ -106,14 +129,14 @@ export async function processAIBroadcasts() {
               .insert([{
                 session_id: b.session_id,
                 sender_name: aiName,
-                message: b.message,
+                message: finalMessage,
                 message_type: 'CTA',
                 metadata: metadata
               }]);
 
             await supabase
               .from('webinar_broadcast_queue')
-              .update({ status: 'SENT', updated_at: nowIso })
+              .update({ message: finalMessage, status: 'SENT', updated_at: nowIso })
               .eq('id', b.id);
 
             processedCount++;
@@ -279,21 +302,16 @@ async function preGenerateAIBroadcasts(sessionId: string) {
       if (messagesInThisCluster <= 0) break;
 
       for (let i = 0; i < messagesInThisCluster; i++) {
-        const angle = angles[(chatGenCount + i) % angles.length];
-        const messageText = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle);
-
-        if (messageText) {
-          const exactMessageTime = new Date(scheduledTime + (i * 2000)).toISOString();
-          await supabase.from('webinar_broadcast_queue').insert([{
-            session_id: session.id,
-            webinar_id: webinar.id,
-            message: messageText,
-            display_type: 'CHAT',
-            image_url: null,
-            scheduled_for: exactMessageTime,
-            status: 'PENDING'
-          }]);
-        }
+        const exactMessageTime = new Date(scheduledTime + (i * 2000)).toISOString();
+        await supabase.from('webinar_broadcast_queue').insert([{
+          session_id: session.id,
+          webinar_id: webinar.id,
+          message: '[PENDING_GENERATION]',
+          display_type: 'CHAT',
+          image_url: null,
+          scheduled_for: exactMessageTime,
+          status: 'PENDING'
+        }]);
       }
 
       chatGenCount += messagesInThisCluster;
@@ -317,29 +335,25 @@ async function preGenerateAIBroadcasts(sessionId: string) {
         bannerCurrentTime = scheduledTime + (bannerIntervalMinutes * 60000);
       }
 
-      const angle = angles[bannerGenCount % angles.length];
       const imageUrl = images.length > 0 ? images[bannerGenCount % images.length] : null;
-      const messageText = await generateAIBroadcastCTA(webinar, settings, knowledge, resources, angle);
-
-      if (messageText) {
-        const exactBannerTime = new Date(scheduledTime).toISOString();
-        await supabase.from('webinar_broadcast_queue').insert([{
-          session_id: session.id,
-          webinar_id: webinar.id,
-          message: messageText,
-          display_type: 'BANNER',
-          image_url: imageUrl,
-          scheduled_for: exactBannerTime,
-          status: 'PENDING'
-        }]);
-      }
+      const exactBannerTime = new Date(scheduledTime).toISOString();
+      
+      await supabase.from('webinar_broadcast_queue').insert([{
+        session_id: session.id,
+        webinar_id: webinar.id,
+        message: '[PENDING_GENERATION]',
+        display_type: 'BANNER',
+        image_url: imageUrl,
+        scheduled_for: exactBannerTime,
+        status: 'PENDING'
+      }]);
 
       bannerGenCount++;
       if (endCond === 'MAX_COUNT' && bannerGenCount >= maxCount) break;
     }
   }
   
-  console.log(`[AI Broadcaster] Pre-generation complete for session ${sessionId}.`);
+  console.log(`[AI Broadcaster] Pre-generation complete for session ${sessionId}. Queue populated without API delays.`);
 }
 
 export async function triggerManualAIBroadcast(webinarId: string, customInstruction?: string) {
