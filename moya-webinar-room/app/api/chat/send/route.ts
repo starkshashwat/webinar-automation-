@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       // Check if session_id passed was actually a webinar_id
       const { data: webinar } = await adminSupabase
         .from('webinars')
-        .select('id')
+        .select('id, status')
         .eq('id', session_id)
         .maybeSingle();
 
