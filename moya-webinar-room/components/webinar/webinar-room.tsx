@@ -365,7 +365,7 @@ export function WebinarRoom({
                 attendeeId={attendeeId}
               />
             ) : session ? (
-              <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} attendeeId={attendeeId} />
+              <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-zinc-600 text-sm">
                 Chat will be available when the session starts
