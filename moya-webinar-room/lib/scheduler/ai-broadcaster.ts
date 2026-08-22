@@ -119,10 +119,18 @@ export async function processAIBroadcasts() {
               }
             }
 
+            // Resolve the exact payment/course URL for metadata
+            let exactCourseUrl = webinar.course_url?.trim() || '';
+            if (!exactCourseUrl && webinar.ai_cta_broadcast_prompt) {
+              const urlMatch = (webinar.ai_cta_broadcast_prompt as string).match(/(https?:\/\/[^\s]+)/i);
+              if (urlMatch) exactCourseUrl = urlMatch[0].replace(/[),.;]+$/, '');
+            }
+
             const metadata = {
               type: b.display_type || 'CHAT',
               imageUrl: b.image_url || null,
-              bannerDuration: bannerDuration
+              bannerDuration: bannerDuration,
+              courseUrl: exactCourseUrl || null
             };
 
             await supabase
@@ -407,7 +415,8 @@ export async function triggerManualAIBroadcast(webinarId: string, customInstruct
       metadata: {
         type: type,
         imageUrl: imageUrl,
-        bannerDuration: webinar.ai_cta_banner_duration_seconds || 30
+        bannerDuration: webinar.ai_cta_banner_duration_seconds || 30,
+        courseUrl: webinar.course_url?.trim() || null
       }
     }])
     .select()

@@ -66,10 +66,10 @@ export function FlashBanner({
     handleClose();
   };
 
-  // Find URL in text
+  // Find URL in text to strip it from the display, but prefer metadata.courseUrl for the button
   const urlRegex = /(https?:\/\/[^\s]+)/g;
   const urls = message.message.match(urlRegex) || [];
-  const primaryUrl = urls[0];
+  const primaryUrl = metadata.courseUrl || urls[0];
   const textWithoutUrl = message.message.replace(urlRegex, '').trim();
 
   const activeImage = resolvedImages.length > 0 ? resolvedImages[currentImageIndex] : null;

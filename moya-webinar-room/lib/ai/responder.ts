@@ -332,7 +332,11 @@ Please generate the promotional CTA message and output a valid JSON object with 
     });
 
     if (result.status === 'processed' && result.response) {
-      return result.response;
+      let finalStr = result.response;
+      if (!finalStr.includes(exactCourseUrl)) {
+        finalStr += `\n\n👉 ${exactCourseUrl}`;
+      }
+      return finalStr;
     }
 
     console.warn('[AI Responder] LLM generation failed or key missing (' + (result.errorMessage || 'unknown') + '), using resilient fallback CTA.');
