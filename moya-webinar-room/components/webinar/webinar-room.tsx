@@ -25,7 +25,7 @@ export function WebinarRoom({
     brand_name: 'MOYA'
   });
   const [attendeeId, setAttendeeId] = useState<string | null>(null);
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     fetch('/api/settings/domain')
@@ -183,12 +183,9 @@ export function WebinarRoom({
 
     // Fast 10-second heartbeat for analytics
     const heartbeatInterval = setInterval(() => {
-      // Small probability to ping the scheduler to trigger auto-end (so we don't DDoS the server)
-      if (Math.random() < 0.05) {
-        fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
-      }
+      const currentAttId = localStorage.getItem(`moya_attendance_session_${webinar.id}`);
+      if (!currentAttId) return;
 
-      if (!attendanceSessionId) return;
       const now = new Date().getTime();
       const diffSeconds = Math.max(0, (now - startTime) / 1000);
       
@@ -196,11 +193,11 @@ export function WebinarRoom({
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
-          attendance_session_id: attendanceSessionId,
+          attendance_session_id: currentAttId,
           current_video_time: diffSeconds 
         })
       }).catch(console.error);
-    }, 10000);
+    }, 30000);
 
     return () => {
       sendLeaveSignal();
@@ -209,8 +206,7 @@ export function WebinarRoom({
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       if (presenceChannel) supabase.removeChannel(presenceChannel);
       clearInterval(heartbeatInterval);
-    };
-  }, [normalizedStatus, session?.started_at, attendanceSessionId, session?.id, webinar.id, supabase]);
+  }, [normalizedStatus, session?.started_at, session?.id, webinar.id, supabase]);
 
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {

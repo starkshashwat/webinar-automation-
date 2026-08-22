@@ -56,7 +56,7 @@ export function HostStudio({
   const [primaryDomain, setPrimaryDomain] = useState<string | null>(null);
   const manuallyEndedRef = useRef(initialWebinar.status?.toUpperCase() === 'ENDED');
 
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
 
   useEffect(() => {
     fetch('/api/settings/domain')
@@ -130,20 +130,14 @@ export function HostStudio({
         } else {
           setCountdown(`${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`);
         }
-      } else if (now >= startTime && now < endTime) {
+      } else if (now >= startTime && now < endTime && !manuallyEndedRef.current) {
         if ((status as string) !== 'LIVE') {
           setStatus('LIVE');
-        }
-        // Ping cron frequently when LIVE to ensure AI & Auto-end runs even without Vercel Cron
-        if (Math.random() < 0.1) { // 10% chance every second = approx every 10 seconds
-          fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
         }
         setCountdown(null);
       } else if (now >= endTime) {
         if ((status as string) !== 'ENDED') {
           setStatus('ENDED');
-          // Trigger the server to end it right now
-          fetch('/api/cron/webinar-scheduler', { method: 'POST', cache: 'no-store' }).catch(() => {});
         }
         setCountdown(null);
       }
@@ -225,8 +219,11 @@ export function HostStudio({
       }
     };
 
+    // Fetch once on mount
     fetchLiveViewers();
-    const interval = setInterval(fetchLiveViewers, 1500);
+
+    // Removed 1.5s polling loop to prevent DDoS (Phase 3 optimization)
+    // We now fetch when the admin explicitly opens the modal via a separate effect below.
 
     // Instant WebSocket Presence Channel (0ms latency sync on join/leave/PiP-close/tab-close)
     const presenceChannel = supabase.channel(`presence-${activeSessionId}`);
@@ -235,7 +232,6 @@ export function HostStudio({
       const state = presenceChannel.presenceState();
       const uniqueAttendeeKeys = new Set(Object.keys(state));
       setLiveCount(uniqueAttendeeKeys.size);
-      fetchLiveViewers();
     };
 
     presenceChannel
@@ -244,40 +240,40 @@ export function HostStudio({
       .on('presence', { event: 'leave' }, syncPresenceState)
       .subscribe();
 
-    // Postgres Realtime Channel for instant database mutations (leave signals, heartbeats)
-    const attChannel = supabase
-      .channel(`live-att-${activeSessionId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'attendance_sessions',
-          filter: `session_id=eq.${activeSessionId}`,
-        },
-        () => {
-          fetchLiveViewers();
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'webinar_watch_events',
-        },
-        () => {
-          fetchLiveViewers();
-        }
-      )
-      .subscribe();
-
     return () => {
-      clearInterval(interval);
       supabase.removeChannel(presenceChannel);
-      supabase.removeChannel(attChannel);
     };
   }, [session?.id, webinar.id, supabase]);
+
+  // Fetch attendees details when the modal is opened
+  useEffect(() => {
+    if (!showLiveViewersModal) return;
+    const activeSessionId = session?.id || webinar.id;
+    if (!activeSessionId) return;
+
+    let isActive = true;
+    const fetchViewers = async () => {
+      try {
+        const res = await fetch(`/api/analytics/live-attendees?session_id=${activeSessionId}&webinar_id=${webinar.id}`);
+        const data = await res.json();
+        if (isActive && data) {
+          setTotalJoinedCount(data.totalJoinedCount || 0);
+          setLiveAttendees(data.attendees || []);
+        }
+      } catch (err) {
+        console.error('Failed to fetch live viewers for modal:', err);
+      }
+    };
+
+    fetchViewers();
+    // Refresh every 10 seconds while modal is open
+    const interval = setInterval(fetchViewers, 10000);
+
+    return () => {
+      isActive = false;
+      clearInterval(interval);
+    };
+  }, [showLiveViewersModal, session?.id, webinar.id]);
 
   const handleStartNow = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();

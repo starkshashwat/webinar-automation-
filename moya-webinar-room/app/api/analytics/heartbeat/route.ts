@@ -24,9 +24,9 @@ export async function POST(request: Request) {
     const lastHeartbeat = new Date(attendance.last_heartbeat_at);
     let elapsedSeconds = Math.floor((now.getTime() - lastHeartbeat.getTime()) / 1000);
     
-    // Cap at 45 seconds to prevent abuse / huge jumps
-    if (elapsedSeconds > 45) {
-      elapsedSeconds = 30; // Default to expected interval
+    // Cap at 90 seconds to prevent abuse / huge jumps
+    if (elapsedSeconds > 90) {
+      elapsedSeconds = 60; // Default to expected interval
     }
 
     const newWatchTime = (attendance.watch_time_seconds || 0) + elapsedSeconds;
@@ -39,12 +39,7 @@ export async function POST(request: Request) {
       })
       .eq('id', attendance_session_id);
 
-    // Log the heartbeat event
-    await supabase.from('webinar_watch_events').insert([{
-      attendance_session_id,
-      event_type: 'HEARTBEAT',
-      video_position_seconds: Math.floor(current_video_time || 0)
-    }]);
+    // Removed the 'HEARTBEAT' event insertion to save massive DB overhead.
 
     return NextResponse.json({ success: true, watch_time: newWatchTime });
   } catch (err) {

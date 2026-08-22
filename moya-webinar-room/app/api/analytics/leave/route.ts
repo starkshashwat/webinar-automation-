@@ -23,13 +23,26 @@ export async function POST(request: Request) {
     const pastIso = new Date(Date.now() - 120000).toISOString();
 
     if (attendance_session_id) {
-      await supabase
+      const { data: att } = await supabase
         .from('attendance_sessions')
-        .update({
-          last_heartbeat_at: pastIso,
-          updated_at: nowIso
-        })
-        .eq('id', attendance_session_id);
+        .select('last_heartbeat_at, watch_time_seconds')
+        .eq('id', attendance_session_id)
+        .single();
+        
+      if (att) {
+        const lastHeartbeat = new Date(att.last_heartbeat_at).getTime();
+        let elapsedSeconds = Math.max(0, Math.floor((Date.now() - lastHeartbeat) / 1000));
+        if (elapsedSeconds > 90) elapsedSeconds = 60;
+        
+        await supabase
+          .from('attendance_sessions')
+          .update({
+            last_heartbeat_at: pastIso,
+            updated_at: nowIso,
+            watch_time_seconds: (att.watch_time_seconds || 0) + elapsedSeconds
+          })
+          .eq('id', attendance_session_id);
+      }
 
       // Log the leave event
       await supabase.from('webinar_watch_events').insert([{
@@ -40,17 +53,22 @@ export async function POST(request: Request) {
     } else if (registration_id && session_id) {
       const { data: existing } = await supabase
         .from('attendance_sessions')
-        .select('id')
+        .select('id, last_heartbeat_at, watch_time_seconds')
         .eq('registration_id', registration_id)
         .eq('session_id', session_id)
         .maybeSingle();
 
       if (existing) {
+        const lastHeartbeat = new Date(existing.last_heartbeat_at).getTime();
+        let elapsedSeconds = Math.max(0, Math.floor((Date.now() - lastHeartbeat) / 1000));
+        if (elapsedSeconds > 90) elapsedSeconds = 60;
+
         await supabase
           .from('attendance_sessions')
           .update({
             last_heartbeat_at: pastIso,
-            updated_at: nowIso
+            updated_at: nowIso,
+            watch_time_seconds: (existing.watch_time_seconds || 0) + elapsedSeconds
           })
           .eq('id', existing.id);
 

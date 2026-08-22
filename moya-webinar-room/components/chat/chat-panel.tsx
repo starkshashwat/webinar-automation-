@@ -25,7 +25,7 @@ export function ChatPanel({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [newMsgIds, setNewMsgIds] = useState<Set<string>>(new Set());
-  const supabase = createClient();
+  const [supabase] = useState(() => createClient());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 

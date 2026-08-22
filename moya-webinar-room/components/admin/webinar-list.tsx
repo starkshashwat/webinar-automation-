@@ -62,7 +62,7 @@ export function WebinarList({ initialWebinars }: { initialWebinars: any[] }) {
   // Periodic scheduler ping to automatically detect time-expired webinars
   useEffect(() => {
     const runSchedulerSync = () => {
-      fetch('/api/cron/webinar-scheduler', { method: 'POST' }).catch(() => {});
+      
     };
 
     runSchedulerSync();

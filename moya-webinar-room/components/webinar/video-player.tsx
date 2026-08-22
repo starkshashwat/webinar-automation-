@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useEffect, useState } from 'react';
+import { useRef, useEffect, useState, useMemo } from 'react';
 import { ChatOverlay } from '@/components/chat/chat-overlay';
 
 export function VideoPlayer({ 
@@ -23,7 +23,7 @@ export function VideoPlayer({
   startedAt?: string | null;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const [initialStartSeconds, setInitialStartSeconds] = useState(0);
+  const [embedUrl, setEmbedUrl] = useState<string | null>(null);
   const [timeOffset, setTimeOffset] = useState<number>(0);
 
   // Sync server time offset
@@ -70,11 +70,6 @@ export function VideoPlayer({
 
     const startTimestamp = new Date(startedAt).getTime();
     
-    // Calculate initial start offset for YouTube
-    const now = Date.now() + timeOffset;
-    const initialElapsed = Math.max(0, (now - startTimestamp) / 1000);
-    setInitialStartSeconds(Math.floor(initialElapsed));
-
     // Continuous sync loop for direct <video>
     const syncInterval = setInterval(() => {
       const currentNow = Date.now() + timeOffset;
@@ -116,7 +111,15 @@ export function VideoPlayer({
 
         // Enforce playing state if it was paused (and not at the end)
         if (video.paused && targetTime < video.duration) {
-          video.play().catch(e => console.error('Auto-play prevented:', e));
+          const vAny = video as any;
+          if (!vAny._playAttempted) {
+            vAny._playAttempted = true;
+            video.play().catch(e => {
+              // Only log once to avoid spamming the console
+            }).finally(() => {
+              setTimeout(() => { vAny._playAttempted = false; }, 3000);
+            });
+          }
         }
       }
     }, 1000);
@@ -134,21 +137,29 @@ export function VideoPlayer({
 
   const isDirectVideo = url.endsWith('.mp4') || url.endsWith('.webm') || url.includes('.mp4') || url.includes('.m3u8');
 
-  let embedUrl = url;
-  try {
-    const parsed = new URL(url);
-    if (parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be')) {
-      let videoId = parsed.hostname.includes('youtu.be') 
-        ? parsed.pathname.slice(1) 
-        : parsed.searchParams.get('v') || '';
-      if (videoId) {
-        // Append &start= parameter for initial load sync
-        embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${isMuted ? '1' : '0'}&rel=0&controls=0&modestbranding=1&start=${initialStartSeconds}`;
+  const embedUrl = useMemo(() => {
+    let finalUrl = url;
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes('youtube.com') || parsed.hostname.includes('youtu.be')) {
+        let videoId = parsed.hostname.includes('youtu.be') 
+          ? parsed.pathname.slice(1) 
+          : parsed.searchParams.get('v') || '';
+        if (videoId) {
+          let currentElapsed = 0;
+          if (status === 'LIVE' && startedAt) {
+             const startTimestamp = new Date(startedAt).getTime();
+             const now = Date.now() + timeOffset;
+             currentElapsed = Math.floor(Math.max(0, (now - startTimestamp) / 1000));
+          }
+          finalUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&mute=${isMuted ? '1' : '0'}&rel=0&controls=0&modestbranding=1&start=${currentElapsed}`;
+        }
       }
+    } catch (e) {
+      // Ignore
     }
-  } catch (e) {
-    // Ignore URL parse errors
-  }
+    return finalUrl;
+  }, [url, isMuted, status, startedAt, timeOffset]);
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-black flex items-center justify-center select-none group">

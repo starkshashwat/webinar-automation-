@@ -25,7 +25,7 @@ export default function AdminDashboard({ params }: { params: Promise<{ id: strin
         return;
       }
 
-      fetch('/api/cron/webinar-scheduler').catch((err) => console.error('Scheduler check error:', err));
+      
 
       const { data: w } = await supabase
         .from('webinars')

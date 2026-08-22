@@ -23,7 +23,7 @@ export default function WebinarsListPage() {
       }
 
       // Check scheduler via API
-      fetch('/api/cron/webinar-scheduler').catch((err) => console.error('Scheduler check error:', err));
+      
 
       const { data } = await supabase
         .from('webinars')

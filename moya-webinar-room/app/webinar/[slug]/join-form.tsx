@@ -102,7 +102,7 @@ export function JoinForm({
           setCurrentStatus('LIVE');
           if (!hasTriggeredCronRef.current) {
             hasTriggeredCronRef.current = true;
-            fetch('/api/cron/webinar-scheduler', { method: 'POST' }).catch(() => {});
+            
           }
         }
         setCountdownText('');
