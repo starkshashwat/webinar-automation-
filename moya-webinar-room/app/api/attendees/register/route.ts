@@ -23,40 +23,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Invalid phone number format' }, { status: 400 });
     }
 
-    // Find the most recent session for this webinar
-    let { data: session } = await adminSupabase
-      .from('webinar_sessions')
-      .select('id, status')
-      .eq('webinar_id', webinar_id)
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Fetch webinar status
+    const { data: w } = await adminSupabase
+      .from('webinars')
+      .select('status, scheduled_start')
+      .eq('id', webinar_id)
+      .single();
 
-    if (!session) {
-      const { data: w } = await adminSupabase
-        .from('webinars')
-        .select('status, scheduled_start')
-        .eq('id', webinar_id)
-        .single();
+    const isWebinarLive = (w?.status === 'LIVE' || w?.status === 'live');
 
-      const sessionStatus = (w?.status === 'LIVE' || w?.status === 'live') ? 'LIVE' : 'WAITING';
-      const sessionStartedAt = sessionStatus === 'LIVE' ? new Date().toISOString() : (w?.scheduled_start || null);
-
-      const { data: newSession, error: sessionError } = await adminSupabase
+    // Find the most recent active session for this webinar (only if currently live)
+    let session: any = null;
+    if (isWebinarLive) {
+      const { data: activeSession } = await adminSupabase
         .from('webinar_sessions')
-        .insert([{ 
-          webinar_id, 
-          status: sessionStatus,
-          started_at: sessionStartedAt
-        }])
         .select('id, status')
-        .single();
-        
-      if (sessionError) {
-        console.warn('[Register] Could not create session, proceeding:', sessionError.message);
-      } else {
-        session = newSession;
-      }
+        .eq('webinar_id', webinar_id)
+        .eq('status', 'LIVE')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      session = activeSession;
     }
 
     // Try to find existing registration by normalized phone or email for this webinar (dedup)

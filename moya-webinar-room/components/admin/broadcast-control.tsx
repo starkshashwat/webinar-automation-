@@ -36,7 +36,9 @@ export function BroadcastControl({
   const [timeRemaining, setTimeRemaining] = useState<string>('');
   const [nextBroadcastTime, setNextBroadcastTime] = useState<string>('');
 
-  const isLive = (webinar.status === 'LIVE' || webinar.status === 'live') && (session?.status === 'LIVE' || session?.status === 'live' || !session);
+  const scheduledTimeMs = webinar.scheduled_start ? new Date(webinar.scheduled_start).getTime() : 0;
+  const isTimeArrived = !scheduledTimeMs || Date.now() >= scheduledTimeMs;
+  const isLive = (webinar.status === 'LIVE' || webinar.status === 'live') && isTimeArrived;
   const isPitchEnabled = webinar.course_pitch_enabled;
   const pitchDelayMins = webinar.course_pitch_delay_minutes || 0;
   const pitchDelaySecs = webinar.course_pitch_delay_seconds || 0;
@@ -101,7 +103,9 @@ export function BroadcastControl({
   // Real-time timers calculation
   useEffect(() => {
     const updateTimers = () => {
-      const isActuallyLive = (webinar.status === 'LIVE' || webinar.status === 'live');
+      const scheduledMs = webinar.scheduled_start ? new Date(webinar.scheduled_start).getTime() : 0;
+      const hasStreamStarted = !scheduledMs || Date.now() >= scheduledMs;
+      const isActuallyLive = (webinar.status === 'LIVE' || webinar.status === 'live') && hasStreamStarted;
       if (!isActuallyLive) {
         setTimeRemaining('Stream not live');
         setNextBroadcastTime('Waiting for stream start');

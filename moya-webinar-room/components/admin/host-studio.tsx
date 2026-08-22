@@ -192,8 +192,11 @@ export function HostStudio({
           const newSession = payload.new as WebinarSession;
           setSession(newSession);
           if (newSession.status === 'LIVE' || (newSession.status as string) === 'live') {
-            manuallyEndedRef.current = false;
-            setStatus('LIVE');
+            const startMs = getStartTime();
+            if (!startMs || Date.now() >= startMs) {
+              manuallyEndedRef.current = false;
+              setStatus('LIVE');
+            }
           }
         }
       )
