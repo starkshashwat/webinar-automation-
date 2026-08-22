@@ -21,7 +21,9 @@ export async function POST(request: Request) {
       const { data: sessList } = await supabase
         .from('webinar_sessions')
         .select('id')
-        .eq('webinar_id', webinar_id);
+        .eq('webinar_id', webinar_id)
+        .order('created_at', { ascending: false })
+        .limit(5);
       if (sessList) {
         sessList.forEach(s => targetSessionIds.add(s.id));
       }

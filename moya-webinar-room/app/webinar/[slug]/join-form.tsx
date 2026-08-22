@@ -125,10 +125,10 @@ export function JoinForm({
     return () => clearInterval(interval);
   }, [webinar.scheduled_start, webinar.daily_start_time, webinar.schedule_type, webinar.duration_minutes, webinar.recording_duration, currentStatus, webinar.status]);
 
-  // 2. Supabase Realtime State Synchronization
+  // 2. Supabase Realtime State Synchronization & Presence
   useEffect(() => {
     const channel = supabase
-      .channel(`attendee-webinar-${webinar.id}`)
+      .channel(`room-${webinar.id}`)
       .on(
         'postgres_changes',
         {
@@ -162,12 +162,31 @@ export function JoinForm({
           }
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED' && attendee) {
+          channel.track({
+            name: attendee.display_name,
+            status: currentStatus,
+            joinedAt: new Date().toISOString()
+          }).catch(console.error);
+        }
+      });
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [webinar.id, supabase]);
+  }, [webinar.id, supabase, attendee]);
+
+  // Sync presence status when currentStatus changes
+  useEffect(() => {
+    if (attendee) {
+      supabase.channel(`room-${webinar.id}`).track({
+        name: attendee.display_name,
+        status: currentStatus,
+        joinedAt: new Date().toISOString()
+      }).catch(console.error);
+    }
+  }, [currentStatus, attendee, webinar.id, supabase]);
 
   if (currentStatus === 'ENDED') {
     return (

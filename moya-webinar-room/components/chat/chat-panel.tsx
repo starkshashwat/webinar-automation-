@@ -13,14 +13,16 @@ export function ChatPanel({
   status,
   isOverlay = false,
   isAdmin = false,
-  onReply
+  onReply,
+  onBannerReceived
 }: { 
   sessionId: string; 
   webinarId?: string;
-  status: 'WAITING' | 'LIVE' | 'ENDED';
+  status: 'WAITING' | 'LIVE' | 'ENDED'; 
   isOverlay?: boolean;
   isAdmin?: boolean;
-  onReply?: (attendeeId: string, name: string) => void;
+  onReply?: (targetId: string, targetName: string) => void;
+  onBannerReceived?: (msg: ChatMessage) => void;
 }) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [hasNewMessages, setHasNewMessages] = useState(false);
@@ -114,7 +116,7 @@ export function ChatPanel({
 
     fetchMessages();
 
-    const uniqueChannelName = `chat-${sessionId}-${Math.random().toString(36).substring(7)}`;
+    const uniqueChannelName = webinarId ? `room-${webinarId}` : `room-${sessionId}`;
     const channel = supabase
       .channel(uniqueChannelName)
       .on(
@@ -126,53 +128,36 @@ export function ChatPanel({
           filter: `session_id=eq.${sessionId}`,
         },
         (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setNewMsgIds((prev) => new Set(prev).add(newMessage.id));
-          setMessages((prev) => [...prev, newMessage]);
+          if (payload.new) {
+            const newMessage = payload.new as ChatMessage;
 
-          // Auto-clear badge after 6 seconds
-          setTimeout(() => {
-            setNewMsgIds((prev) => {
-              const next = new Set(prev);
-              next.delete(newMessage.id);
-              return next;
-            });
-          }, 6000);
+            if (newMessage.message_type === 'CTA' && onBannerReceived) {
+              const meta = typeof newMessage.metadata === 'string' 
+                ? (() => { try { return JSON.parse(newMessage.metadata); } catch { return {}; } })() 
+                : (newMessage.metadata || {});
+                
+              if (meta.type === 'BANNER' || meta.display_type === 'BANNER') {
+                onBannerReceived(newMessage);
+              }
+            }
+
+            setNewMsgIds((prev) => new Set(prev).add(newMessage.id));
+            setMessages((prev) => [...prev, newMessage]);
+
+            setTimeout(() => {
+              setNewMsgIds((prev) => {
+                const next = new Set(prev);
+                next.delete(newMessage.id);
+                return next;
+              });
+            }, 6000);
+          }
         }
       )
       .subscribe();
 
-    // Subscribe to private messages if we have a private channel ID
-    let privateChannel: ReturnType<typeof supabase.channel> | null = null;
-    const privateChannelId = webinarId ? localStorage.getItem(`moya_private_channel_${webinarId}`) : null;
-    if (privateChannelId) {
-      privateChannel = supabase
-        .channel(`private-chat-${privateChannelId}`)
-        .on(
-          'broadcast',
-          { event: 'message' },
-          (payload) => {
-            if (payload.payload) {
-              const pMsg = payload.payload as ChatMessage;
-              setNewMsgIds((prev) => new Set(prev).add(pMsg.id));
-              setMessages((prev) => [...prev, pMsg]);
-
-              setTimeout(() => {
-                setNewMsgIds((prev) => {
-                  const next = new Set(prev);
-                  next.delete(pMsg.id);
-                  return next;
-                });
-              }, 6000);
-            }
-          }
-        )
-        .subscribe();
-    }
-
     return () => {
       supabase.removeChannel(channel);
-      if (privateChannel) supabase.removeChannel(privateChannel);
     };
   }, [sessionId, supabase, webinarId]);
 

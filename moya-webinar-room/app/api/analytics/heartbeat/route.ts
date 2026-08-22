@@ -10,6 +10,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing session' }, { status: 400 });
     }
 
+    // Try RPC first (Atomic, 1 Query)
+    const { data: newWatchTime, error: rpcError } = await supabase
+      .rpc('increment_watch_time', { p_id: attendance_session_id });
+
+    if (!rpcError && newWatchTime !== -1) {
+      return NextResponse.json({ success: true, watch_time: newWatchTime });
+    }
+
+    // Fallback if RPC doesn't exist yet (Old 2-Query Logic)
     const { data: attendance } = await supabase
       .from('attendance_sessions')
       .select('last_heartbeat_at, watch_time_seconds')
@@ -24,24 +33,21 @@ export async function POST(request: Request) {
     const lastHeartbeat = new Date(attendance.last_heartbeat_at);
     let elapsedSeconds = Math.floor((now.getTime() - lastHeartbeat.getTime()) / 1000);
     
-    // Cap at 90 seconds to prevent abuse / huge jumps
     if (elapsedSeconds > 90) {
-      elapsedSeconds = 60; // Default to expected interval
+      elapsedSeconds = 30; // Default to expected interval
     }
 
-    const newWatchTime = (attendance.watch_time_seconds || 0) + elapsedSeconds;
+    const fallbackWatchTime = (attendance.watch_time_seconds || 0) + elapsedSeconds;
 
     await supabase
       .from('attendance_sessions')
       .update({
         last_heartbeat_at: now.toISOString(),
-        watch_time_seconds: newWatchTime
+        watch_time_seconds: fallbackWatchTime
       })
       .eq('id', attendance_session_id);
 
-    // Removed the 'HEARTBEAT' event insertion to save massive DB overhead.
-
-    return NextResponse.json({ success: true, watch_time: newWatchTime });
+    return NextResponse.json({ success: true, watch_time: fallbackWatchTime });
   } catch (err) {
     console.error('[Heartbeat Error]:', err);
     return NextResponse.json({ error: 'Failed' }, { status: 500 });

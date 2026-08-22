@@ -32,7 +32,7 @@ export async function POST(request: Request) {
       if (att) {
         const lastHeartbeat = new Date(att.last_heartbeat_at).getTime();
         let elapsedSeconds = Math.max(0, Math.floor((Date.now() - lastHeartbeat) / 1000));
-        if (elapsedSeconds > 90) elapsedSeconds = 60;
+        if (elapsedSeconds > 180) elapsedSeconds = 120;
         
         await supabase
           .from('attendance_sessions')
@@ -61,7 +61,7 @@ export async function POST(request: Request) {
       if (existing) {
         const lastHeartbeat = new Date(existing.last_heartbeat_at).getTime();
         let elapsedSeconds = Math.max(0, Math.floor((Date.now() - lastHeartbeat) / 1000));
-        if (elapsedSeconds > 90) elapsedSeconds = 60;
+        if (elapsedSeconds > 180) elapsedSeconds = 120;
 
         await supabase
           .from('attendance_sessions')

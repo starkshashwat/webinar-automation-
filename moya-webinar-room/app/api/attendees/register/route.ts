@@ -53,21 +53,24 @@ export async function POST(request: Request) {
     const trimmedPhone = phone ? phone.trim() : null;
     const cleanPhoneDigits = trimmedPhone ? trimmedPhone.replace(/[^0-9]/g, '').slice(-10) : null;
 
-    const { data: existingList } = await adminSupabase
-      .from('webinar_registrations')
-      .select('*')
-      .eq('webinar_id', webinar_id);
+    // Build OR query safely to avoid null/comma string parsing issues
+    const orConditions = [];
+    if (trimmedEmail) orConditions.push(`email.eq.${trimmedEmail}`);
+    if (trimmedPhone) orConditions.push(`phone.eq.${trimmedPhone}`);
+    
+    let existingList: any[] | null = null;
+    
+    if (orConditions.length > 0) {
+      const { data } = await adminSupabase
+        .from('webinar_registrations')
+        .select('id, name, email, phone')
+        .eq('webinar_id', webinar_id)
+        .or(orConditions.join(','))
+        .limit(1);
+      existingList = data;
+    }
 
-    const existing = (existingList || []).find((r: any) => {
-      if (cleanPhoneDigits && r.phone) {
-        const rDigits = r.phone.replace(/[^0-9]/g, '').slice(-10);
-        if (rDigits && rDigits === cleanPhoneDigits) return true;
-      }
-      if (trimmedEmail && r.email && r.email.trim().toLowerCase() === trimmedEmail) {
-        return true;
-      }
-      return false;
-    });
+    const existing = existingList && existingList.length > 0 ? existingList[0] : null;
 
     if (existing) {
       // Found existing registration — reuse it and update name/email/phone if changed

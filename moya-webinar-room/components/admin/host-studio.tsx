@@ -21,6 +21,7 @@ export function HostStudio({
   const [webinar, setWebinar] = useState<Webinar>(initialWebinar);
   const [session, setSession] = useState<WebinarSession | null>(initialSession);
   const [liveCount, setLiveCount] = useState<number>(0);
+  const [waitingCount, setWaitingCount] = useState<number>(0);
   const [totalJoinedCount, setTotalJoinedCount] = useState<number>(0);
   const [liveAttendees, setLiveAttendees] = useState<any[]>([]);
   const [showLiveViewersModal, setShowLiveViewersModal] = useState(false);
@@ -226,12 +227,37 @@ export function HostStudio({
     // We now fetch when the admin explicitly opens the modal via a separate effect below.
 
     // Instant WebSocket Presence Channel (0ms latency sync on join/leave/PiP-close/tab-close)
-    const presenceChannel = supabase.channel(`presence-${activeSessionId}`);
+    const presenceChannel = supabase.channel(`room-${webinar.id}`);
 
     const syncPresenceState = () => {
       const state = presenceChannel.presenceState();
-      const uniqueAttendeeKeys = new Set(Object.keys(state));
-      setLiveCount(uniqueAttendeeKeys.size);
+      
+      let liveCountCalc = 0;
+      let waitingCountCalc = 0;
+      let uniqueAttendees = new Map();
+
+      for (const key of Object.keys(state)) {
+        const presenceObjects = state[key] as any[];
+        const presence = presenceObjects[0];
+        if (presence) {
+          uniqueAttendees.set(key, presence);
+          if (presence.status === 'LIVE') liveCountCalc++;
+          if (presence.status === 'WAITING') waitingCountCalc++;
+        }
+      }
+
+      setLiveCount(liveCountCalc);
+      setWaitingCount(waitingCountCalc);
+      
+      setTotalJoinedCount((prev) => Math.max(prev, uniqueAttendees.size));
+      
+      setLiveAttendees(Array.from(uniqueAttendees.values()).map((p: any) => ({
+        name: p.name || 'Anonymous Attendee',
+        email: p.email || '',
+        phone: p.phone || '',
+        status: p.status || 'LIVE',
+        watch_time_seconds: 0
+      })));
     };
 
     presenceChannel
@@ -245,35 +271,7 @@ export function HostStudio({
     };
   }, [session?.id, webinar.id, supabase]);
 
-  // Fetch attendees details when the modal is opened
-  useEffect(() => {
-    if (!showLiveViewersModal) return;
-    const activeSessionId = session?.id || webinar.id;
-    if (!activeSessionId) return;
-
-    let isActive = true;
-    const fetchViewers = async () => {
-      try {
-        const res = await fetch(`/api/analytics/live-attendees?session_id=${activeSessionId}&webinar_id=${webinar.id}`);
-        const data = await res.json();
-        if (isActive && data) {
-          setTotalJoinedCount(data.totalJoinedCount || 0);
-          setLiveAttendees(data.attendees || []);
-        }
-      } catch (err) {
-        console.error('Failed to fetch live viewers for modal:', err);
-      }
-    };
-
-    fetchViewers();
-    // Refresh every 10 seconds while modal is open
-    const interval = setInterval(fetchViewers, 10000);
-
-    return () => {
-      isActive = false;
-      clearInterval(interval);
-    };
-  }, [showLiveViewersModal, session?.id, webinar.id]);
+  // DB polling for live viewers removed. Tracking is now 100% handled by Zero-Cost Presence tracking above.
 
   const handleStartNow = async (e?: React.MouseEvent) => {
     if (e) e.preventDefault();
@@ -326,16 +324,28 @@ export function HostStudio({
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                {/* Live Attendees Count Badge */}
-                <button
-                  onClick={() => setShowLiveViewersModal(true)}
-                  className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer hover:scale-105 active:scale-95"
-                  title="Click to view live attendee details & watch time"
-                >
-                  <Users className="w-3.5 h-3.5" />
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  <span>{liveCount} Watching</span>
-                </button>
+                  {/* Live Attendees Count Badge */}
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowLiveViewersModal(true)}
+                      className="flex items-center gap-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer hover:scale-105 active:scale-95"
+                      title="Click to view live attendee details & watch time"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span>{liveCount} Watching</span>
+                    </button>
+                    
+                    <button
+                      onClick={() => setShowLiveViewersModal(true)}
+                      className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-2.5 py-0.5 rounded-full text-[11px] font-bold transition-all cursor-pointer hover:scale-105 active:scale-95"
+                      title="Click to view waiting attendee details"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse" />
+                      <span>{waitingCount} Waiting</span>
+                    </button>
+                  </div>
 
                 {status === 'LIVE' && (
                   <span className="flex items-center gap-1 text-[11px] font-mono font-bold bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-md">

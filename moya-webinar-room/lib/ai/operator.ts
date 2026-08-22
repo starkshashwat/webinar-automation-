@@ -13,21 +13,34 @@ export interface ProcessChatMessageParams {
   senderName: string;
 }
 
+const sessionCache = new Map<string, { data: any; expiry: number }>();
+const CACHE_TTL_MS = 60000;
+
 export async function processChatMessage(params: ProcessChatMessageParams): Promise<void> {
   const { sessionId, attendeeId, messageId, message, senderName } = params;
   const supabase = createAdminClient();
 
   try {
-    // 1. Fetch Session & Webinar details
-    const { data: session, error: sessionError } = await supabase
-      .from('webinar_sessions')
-      .select('*, webinars(*)')
-      .eq('id', sessionId)
-      .single();
+    // 1. Fetch Session & Webinar details (CACHED)
+    let session = null;
+    const cachedSession = sessionCache.get(sessionId);
+    
+    if (cachedSession && cachedSession.expiry > Date.now()) {
+      session = cachedSession.data;
+    } else {
+      const { data, error: sessionError } = await supabase
+        .from('webinar_sessions')
+        .select('*, webinars(*)')
+        .eq('id', sessionId)
+        .single();
 
-    if (sessionError || !session || !session.webinars) {
-      console.warn('[AI Operator] Session or webinar not found:', sessionId);
-      return;
+      if (sessionError || !data || !data.webinars) {
+        console.warn('[AI Operator] Session or webinar not found:', sessionId);
+        return;
+      }
+      
+      session = data;
+      sessionCache.set(sessionId, { data: session, expiry: Date.now() + CACHE_TTL_MS });
     }
 
     const webinar = session.webinars as any;

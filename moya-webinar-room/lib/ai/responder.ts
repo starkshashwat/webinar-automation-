@@ -11,7 +11,27 @@ import { applyGuardrails } from './guardrails';
 import { detectPrivateIntent } from './classifier';
 import { getAIProvider } from './providers';
 
+// --- TTL CACHE FOR DATABASE READS ---
+const cache = new Map<string, { data: any; expiry: number }>();
+const CACHE_TTL_MS = 60000; // 60 seconds
+
+function getCached<T>(key: string): T | null {
+  const item = cache.get(key);
+  if (item && item.expiry > Date.now()) {
+    return item.data as T;
+  }
+  return null;
+}
+
+function setCache(key: string, data: any) {
+  cache.set(key, { data, expiry: Date.now() + CACHE_TTL_MS });
+}
+// ------------------------------------
+
 export async function getAISettings(): Promise<AISettings> {
+  const cached = getCached<AISettings>('settings');
+  if (cached) return cached;
+
   const supabase = createAdminClient();
   const { data } = await supabase
     .from('ai_settings')
@@ -19,9 +39,12 @@ export async function getAISettings(): Promise<AISettings> {
     .limit(1)
     .single();
 
-  if (data) return data as AISettings;
+  if (data) {
+    setCache('settings', data);
+    return data as AISettings;
+  }
 
-  return {
+  const fallback = {
     id: '00000000-0000-0000-0000-000000000001',
     ai_name: 'MOYA Webinar Assistant',
     provider: 'nvidia',
@@ -29,10 +52,17 @@ export async function getAISettings(): Promise<AISettings> {
     model: process.env.AI_MODEL || 'meta/llama-3.1-8b-instruct',
     system_instructions: 'You are the official webinar assistant. Answer attendee questions clearly and concisely using only the provided webinar knowledge. Never invent information or URLs.',
     is_enabled_globally: true,
-  };
+  } as AISettings;
+  
+  setCache('settings', fallback);
+  return fallback;
 }
 
 export async function getActiveKnowledge(webinarId: string): Promise<AIKnowledge[]> {
+  const cacheKey = `knowledge_${webinarId}`;
+  const cached = getCached<AIKnowledge[]>(cacheKey);
+  if (cached) return cached;
+
   const supabase = createAdminClient();
   
   // Fetch entries specific to this webinar OR global (webinar_id is null)
@@ -51,21 +81,28 @@ export async function getActiveKnowledge(webinarId: string): Promise<AIKnowledge
       .eq('enabled', true);
 
     if (legacyData && legacyData.length > 0) {
-      return legacyData.map((k: any) => ({
+      const res = legacyData.map((k: any) => ({
         id: k.id,
         webinar_id: k.webinar_id,
         title: k.question,
         content: k.answer,
         active: k.enabled,
       }));
+      setCache(cacheKey, res);
+      return res;
     }
     return [];
   }
 
+  setCache(cacheKey, data);
   return data as AIKnowledge[];
 }
 
 export async function getActiveResources(webinarId: string): Promise<AIResource[]> {
+  const cacheKey = `resources_${webinarId}`;
+  const cached = getCached<AIResource[]>(cacheKey);
+  if (cached) return cached;
+
   const supabase = createAdminClient();
   
   const { data, error } = await supabase
@@ -75,6 +112,8 @@ export async function getActiveResources(webinarId: string): Promise<AIResource[
     .eq('active', true);
 
   if (error || !data) return [];
+  
+  setCache(cacheKey, data);
   return data as AIResource[];
 }
 

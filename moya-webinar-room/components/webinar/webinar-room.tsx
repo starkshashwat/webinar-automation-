@@ -87,63 +87,15 @@ export function WebinarRoom({
     .catch(console.error);
   }, [session?.id, webinar.id]);
 
-  // Banner Listener
-  useEffect(() => {
-    if (!session?.id || normalizedStatus !== 'LIVE') return;
-
-    const channel = supabase
-      .channel(`banner-${session.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'chat_messages',
-          filter: `session_id=eq.${session.id}`,
-        },
-        (payload) => {
-          const msg = payload.new as ChatMessage;
-          const meta = typeof msg.metadata === 'string' 
-            ? (() => { try { return JSON.parse(msg.metadata); } catch { return {}; } })() 
-            : (msg.metadata || {});
-          if (msg.message_type === 'CTA' && (meta.type === 'BANNER' || meta.type === 'BOTH' || meta.display_type === 'BANNER')) {
-            setActiveBanner({ ...msg, metadata: meta });
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [session?.id, normalizedStatus, supabase]);
+  // Banner channel removed to prevent double subscription.
+  // Banners are now received via onBannerReceived prop from ChatPanel.
 
   // Heartbeat & Presence effect
   useEffect(() => {
-    if (normalizedStatus !== 'LIVE' || !session?.started_at) return;
+    if (normalizedStatus !== 'LIVE' || !session?.started_at || !session?.id) return;
 
     const startTime = new Date(session.started_at).getTime();
-
-    // Realtime Presence Tracker for Live Watcher Synchronization
     const regId = localStorage.getItem(`moya_attendee_${webinar.id}`);
-    const attendeeName = localStorage.getItem(`moya_attendee_name_${webinar.id}`) || 'Attendee';
-    let presenceChannel: ReturnType<typeof supabase.channel> | null = null;
-
-    if (regId) {
-      presenceChannel = supabase.channel(`presence-${session.id}`, {
-        config: { presence: { key: regId } }
-      });
-
-      presenceChannel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED' && presenceChannel) {
-          await presenceChannel.track({
-            registration_id: regId,
-            name: attendeeName,
-            online_at: new Date().toISOString()
-          });
-        }
-      });
-    }
 
     const sendLeaveSignal = () => {
       const attId = localStorage.getItem(`moya_attendance_session_${webinar.id}`);
@@ -168,12 +120,6 @@ export function WebinarRoom({
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'hidden') {
         sendLeaveSignal();
-      } else if (document.visibilityState === 'visible' && presenceChannel && regId) {
-        presenceChannel.track({
-          registration_id: regId,
-          name: attendeeName,
-          online_at: new Date().toISOString()
-        });
       }
     };
 
@@ -197,14 +143,13 @@ export function WebinarRoom({
           current_video_time: diffSeconds 
         })
       }).catch(console.error);
-    }, 30000);
+    }, 120000);
 
     return () => {
       sendLeaveSignal();
       window.removeEventListener('beforeunload', sendLeaveSignal);
       window.removeEventListener('pagehide', sendLeaveSignal);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      if (presenceChannel) supabase.removeChannel(presenceChannel);
       clearInterval(heartbeatInterval);
     };
   }, [normalizedStatus, session?.started_at, session?.id, webinar.id, supabase]);
@@ -301,16 +246,18 @@ export function WebinarRoom({
             </div>
           ) : (
             <div className={`w-full h-full flex flex-col relative ${isFullscreen ? 'max-w-none' : 'max-w-5xl aspect-video rounded-xl overflow-hidden'}`}>
-              <VideoPlayer 
-                url={webinar.recording_url || webinar.video_url} 
-                sessionId={session?.id}
-                webinarId={webinar.id}
-                status={normalizedStatus}
-                isMuted={isMuted}
-                isFullscreen={isFullscreen}
-                startedAt={webinar.scheduled_start || session?.started_at || webinar.actual_start_at || webinar.started_at || undefined}
-                hideOverlay={!!activeBanner}
-              />
+                <VideoPlayer 
+                  url={webinar.recording_url || webinar.video_url} 
+                  sessionId={session?.id}
+                  webinarId={webinar.id}
+                  status={normalizedStatus}
+                  isMuted={isMuted}
+                  isFullscreen={isFullscreen}
+                  startedAt={webinar.scheduled_start || session?.started_at || webinar.actual_start_at || webinar.started_at || undefined}
+                  hideOverlay={!!activeBanner}
+                  onMuteToggle={setIsMuted}
+                  onFullscreenToggle={toggleFullscreen}
+                />
               
               {/* Unmute Overlay */}
               {isMuted && session && session.status === 'LIVE' && (
@@ -360,7 +307,18 @@ export function WebinarRoom({
                 attendeeId={attendeeId}
               />
             ) : session ? (
-              <ChatPanel sessionId={session.id} webinarId={webinar.id} status={normalizedStatus} isOverlay={false} />
+            <ChatPanel 
+              sessionId={session.id} 
+              webinarId={webinar.id} 
+              status={normalizedStatus} 
+              isOverlay={false} 
+              onBannerReceived={(msg) => {
+                const meta = typeof msg.metadata === 'string' 
+                  ? (() => { try { return JSON.parse(msg.metadata); } catch { return {}; } })() 
+                  : (msg.metadata || {});
+                setActiveBanner({ ...msg, metadata: meta });
+              }}
+            />
             ) : (
               <div className="flex h-full items-center justify-center p-6 text-center text-zinc-600 text-sm">
                 Chat will be available when the session starts

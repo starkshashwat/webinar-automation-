@@ -4,6 +4,7 @@ import { createClient, createAdminClient } from '@/lib/supabase/server';
 import { processChatMessage } from '@/lib/ai/operator';
 
 const rateLimit = new Map<string, { count: number, timestamp: number }>();
+const sessionCache = new Map<string, { data: any, expiry: number }>();
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export async function POST(request: Request) {
@@ -37,15 +38,26 @@ export async function POST(request: Request) {
     // Default to ATTENDEE unless HOST is specified
     let finalMessageType = message_type === 'HOST' ? 'HOST' : 'ATTENDEE';
 
-    // 1. Ensure valid webinar session
+    // 1. Ensure valid webinar session (With Cache for burst protection)
     let validSessionId = session_id;
     let targetWebinarId: string | null = null;
 
-    const { data: existingSession } = await adminSupabase
-      .from('webinar_sessions')
-      .select('id, webinar_id')
-      .eq('id', session_id)
-      .maybeSingle();
+    let existingSession = null;
+    const nowTime = Date.now();
+    const cached = sessionCache.get(session_id);
+    if (cached && cached.expiry > nowTime) {
+      existingSession = cached.data;
+    } else {
+      const { data } = await adminSupabase
+        .from('webinar_sessions')
+        .select('id, webinar_id')
+        .eq('id', session_id)
+        .maybeSingle();
+      existingSession = data;
+      if (existingSession) {
+        sessionCache.set(session_id, { data: existingSession, expiry: nowTime + 60000 });
+      }
+    }
 
     if (existingSession) {
       targetWebinarId = existingSession.webinar_id;
