@@ -38,110 +38,111 @@ export async function processAIBroadcasts() {
         const webinar = items[0]?.webinars as any;
         const maxCount = webinar?.ai_cta_broadcast_max_count || 3;
         const endCondition = webinar?.ai_cta_broadcast_end_condition || 'MAX_COUNT';
-        const intervalMinutes = webinar?.ai_cta_broadcast_interval_minutes || 5;
+        const chatIntervalMinutes = webinar?.ai_cta_broadcast_interval_minutes || 5;
+        const bannerIntervalMinutes = Number(webinar?.ai_cta_banner_interval_minutes) || chatIntervalMinutes;
         const bannerDuration = webinar?.ai_cta_banner_duration_seconds || 30;
 
-        // Check how many CTA messages have already been sent for this session
-        const { count: alreadySentCount } = await supabase
-          .from('chat_messages')
-          .select('*', { count: 'exact', head: true })
-          .eq('session_id', sessionId)
-          .eq('message_type', 'CTA');
+        // Process CHAT and BANNER independently
+        for (const displayType of ['CHAT', 'BANNER']) {
+          const typeItems = items.filter(i => i.display_type === displayType);
+          if (typeItems.length === 0) continue;
 
-        const currentSent = alreadySentCount || 0;
-
-        // If MAX_COUNT is reached, cancel all remaining pending items
-        if (endCondition === 'MAX_COUNT' && currentSent >= maxCount) {
-          await supabase
-            .from('webinar_broadcast_queue')
-            .update({ status: 'CANCELLED', updated_at: nowIso })
+          // Count how many of this specific type have been sent
+          const { data: sentMessages } = await supabase
+            .from('chat_messages')
+            .select('metadata')
             .eq('session_id', sessionId)
-            .eq('status', 'PENDING');
-          continue;
-        }
+            .eq('message_type', 'CTA');
 
-        // Identify the earliest wave (items within 5s of the first item's scheduled_for)
-        const earliestTime = new Date(items[0].scheduled_for).getTime();
-        const currentWaveItems = items.filter(
-          (item) => Math.abs(new Date(item.scheduled_for).getTime() - earliestTime) <= 5000
-        );
+          const currentSent = (sentMessages || []).filter(msg => {
+            const meta = typeof msg.metadata === 'string' ? JSON.parse(msg.metadata) : (msg.metadata || {});
+            return meta.type === displayType || meta.type === 'BOTH';
+          }).length;
 
-        // Cap wave by remaining quota
-        const allowedInThisWave = endCondition === 'MAX_COUNT' 
-          ? Math.min(currentWaveItems.length, maxCount - currentSent)
-          : currentWaveItems.length;
-
-        const toSend = currentWaveItems.slice(0, allowedInThisWave);
-
-        for (let i = 0; i < toSend.length; i++) {
-          const b = toSend[i];
-
-          // OPTIMISTIC LOCKING: Atomically claim the item PENDING → PROCESSING
-          // Only one concurrent caller can succeed here for a given item
-          const { data: claimed, error: claimError } = await supabase
-            .from('webinar_broadcast_queue')
-            .update({ status: 'PROCESSING', updated_at: nowIso })
-            .eq('id', b.id)
-            .eq('status', 'PENDING')  // Only update if still PENDING
-            .select('id')
-            .single();
-
-          if (claimError || !claimed) {
-            // Another concurrent call already claimed this item — skip
+          // If MAX_COUNT is reached for this type, cancel remaining
+          if (endCondition === 'MAX_COUNT' && currentSent >= maxCount) {
+            await supabase
+              .from('webinar_broadcast_queue')
+              .update({ status: 'CANCELLED', updated_at: nowIso })
+              .eq('session_id', sessionId)
+              .eq('display_type', displayType)
+              .eq('status', 'PENDING');
             continue;
           }
 
-          const metadata = {
-            type: b.display_type || 'CHAT',
-            imageUrl: b.image_url || null,
-            bannerDuration: bannerDuration
-          };
+          // Identify earliest wave for this type
+          const earliestTime = new Date(typeItems[0].scheduled_for).getTime();
+          const currentWaveItems = typeItems.filter(
+            (item) => Math.abs(new Date(item.scheduled_for).getTime() - earliestTime) <= 5000
+          );
 
-          // Insert CTA into chat_messages
-          await supabase
-            .from('chat_messages')
-            .insert([{
-              session_id: b.session_id,
-              sender_name: aiName,
-              message: b.message,
-              message_type: 'CTA',
-              metadata: metadata
-            }]);
+          const allowedInThisWave = endCondition === 'MAX_COUNT' 
+            ? Math.min(currentWaveItems.length, maxCount - currentSent)
+            : currentWaveItems.length;
 
-          // Mark as fully SENT after successful insert
-          await supabase
-            .from('webinar_broadcast_queue')
-            .update({ status: 'SENT', updated_at: nowIso })
-            .eq('id', b.id);
+          const toSend = currentWaveItems.slice(0, allowedInThisWave);
 
-          processedCount++;
-        }
+          for (let i = 0; i < toSend.length; i++) {
+            const b = toSend[i];
 
-        // If there were extra items in current wave that exceeded maxCount, cancel them
-        const excessInWave = currentWaveItems.slice(allowedInThisWave);
-        for (const ex of excessInWave) {
-          await supabase
-            .from('webinar_broadcast_queue')
-            .update({ status: 'CANCELLED', updated_at: nowIso })
-            .eq('id', ex.id);
-        }
+            const { data: claimed, error: claimError } = await supabase
+              .from('webinar_broadcast_queue')
+              .update({ status: 'PROCESSING', updated_at: nowIso })
+              .eq('id', b.id)
+              .eq('status', 'PENDING')
+              .select('id')
+              .single();
 
-        // CRITICAL ANTI-SPAM PROTECTION:
-        // If there are subsequent items that also had scheduled_for <= now (e.g. late ticks),
-        // DO NOT send them now! Reschedule them forward with proper interval spacing.
-        const remainingPastItems = items.filter(
-          (item) => !currentWaveItems.includes(item)
-        );
+            if (claimError || !claimed) continue;
 
-        if (remainingPastItems.length > 0) {
-          console.log(`[AI Broadcaster] Spacing out ${remainingPastItems.length} overdue items for session ${sessionId} to prevent spam`);
-          for (let idx = 0; idx < remainingPastItems.length; idx++) {
-            const item = remainingPastItems[idx];
-            const nextScheduled = new Date(now.getTime() + (idx + 1) * intervalMinutes * 60000).toISOString();
+            const metadata = {
+              type: b.display_type || 'CHAT',
+              imageUrl: b.image_url || null,
+              bannerDuration: bannerDuration
+            };
+
+            await supabase
+              .from('chat_messages')
+              .insert([{
+                session_id: b.session_id,
+                sender_name: aiName,
+                message: b.message,
+                message_type: 'CTA',
+                metadata: metadata
+              }]);
+
             await supabase
               .from('webinar_broadcast_queue')
-              .update({ scheduled_for: nextScheduled, updated_at: nowIso })
-              .eq('id', item.id);
+              .update({ status: 'SENT', updated_at: nowIso })
+              .eq('id', b.id);
+
+            processedCount++;
+          }
+
+          // Cancel excess in wave
+          const excessInWave = currentWaveItems.slice(allowedInThisWave);
+          for (const ex of excessInWave) {
+            await supabase
+              .from('webinar_broadcast_queue')
+              .update({ status: 'CANCELLED', updated_at: nowIso })
+              .eq('id', ex.id);
+          }
+
+          // Anti-spam rescheduling for remaining overdue items of this type
+          const remainingPastItems = typeItems.filter(
+            (item) => !currentWaveItems.includes(item)
+          );
+
+          if (remainingPastItems.length > 0) {
+            const intervalMins = displayType === 'BANNER' ? bannerIntervalMinutes : chatIntervalMinutes;
+            for (let idx = 0; idx < remainingPastItems.length; idx++) {
+              const item = remainingPastItems[idx];
+              const nextScheduled = new Date(now.getTime() + (idx + 1) * intervalMins * 60000).toISOString();
+              await supabase
+                .from('webinar_broadcast_queue')
+                .update({ scheduled_for: nextScheduled, updated_at: nowIso })
+                .eq('id', item.id);
+            }
           }
         }
       }
